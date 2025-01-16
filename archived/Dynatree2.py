@@ -1,15 +1,14 @@
 import numpy as np
-import random
-from Tree import Tree
+from Tree2 import Tree
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.metrics import r2_score
-from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
+from sklearn.utils.estimator_checks import check_estimator
+from sklearn.utils.validation import check_X_y, check_array
 
 
 class Dynatree(RegressorMixin, BaseEstimator):
     def __init__(self, n_trees = 10, window = 4, max_depth = 3, min_samples = 2):
         self.n_trees = n_trees
-        print("Initialized")
         
         #Setting the window size
         if window == 'sqrt':
@@ -37,88 +36,84 @@ class Dynatree(RegressorMixin, BaseEstimator):
     
     def add_new_tree(self, tree):
         """Function that deals with adding a new tree to the list of trees, when necessary. """
-        self._trees.append(tree)
-        self._tree_window.append(tree)
-        self._predictions_window.append(tree.get_training_predictions())
+        self.trees.append(tree)
+        self.tree_window.append(tree)
+        self.predictions_window.append(tree.get_training_predictions())
         
         #Ensures that the window size remains constant!
-        if len(self._tree_window) > self.window:
-            self._predictions_window.pop(0)
-            self._tree_window.pop(0)
+        if len(self.tree_window) > self.window:
+            self.predictions_window.pop(0)
+            self.tree_window.pop(0)
     
     def fit(self, X, y):
         X, y = check_X_y(X, y, accept_sparse=False)
-        self.n_features_in_ = X.shape[1]  # for sklearn compliance
         
-        self._trees = []
-        self._tree_window = []  #List of trees we are currently looking at
-        self._predictions_window = []
+        self.trees = []
+        self.tree_window = []  #List of trees we are currently looking at
+        self.predictions_window = []
         
         X = np.array(X)
         y = np.array(y)
         
         #Creating first tree
-        initial_tree = Tree(X, y, max_depth=self.max_depth, min_samples = self.min_samples)
+        initial_tree = Tree(X, y)
         initial_tree.get_best_split(X, y, np.zeros(len(y)), 0)
-        initial_tree.split(X, y) #Split the tree first, since we need to have a split to compare to!
-
+        initial_tree.split(X, y)
         self.add_new_tree(initial_tree)
+        
                 
-        while len(self._trees) <= self.n_trees:
+        while len(self.trees) <= self.n_trees:
             """The key part of the function. This creates splits one by one until all trees are filled"""
             #First: see if I can do better given the trees we already have in the tree window
             error_reductions = []
-            num_total_predictions = len(self._predictions_window)
-            for (idx, tree) in enumerate(self._tree_window):
-                predictions_without_tree = np.delete(self._predictions_window, idx, 0) #Getting predictions without the tree
+            num_total_predictions = len(self.predictions_window)
+            for (idx, tree) in enumerate(self.tree_window):
+                print("Idx is ", idx)
+                predictions_without_tree = np.delete(self.predictions_window, idx, 0) #Getting predictions without the tree
                 if len(predictions_without_tree) == 0:
                     mean_predictions_without_tree = np.zeros(len(y)) #No other predictions
                 else:
                     mean_predictions_without_tree = np.mean(predictions_without_tree, axis = 0)
-                
                 """Goes through every tree and spits out which leaf and which splitting function is best, and how much it reduces the error"""
-                #If there are no other trees in the window, num_total_predictions - 1 will be 0, so only the new tree will be considered
-                error_reduction = tree.get_best_split(X, y, mean_predictions_without_tree, num_total_predictions - 1) 
+                error_reduction = tree.get_best_split(X, y, mean_predictions_without_tree, num_total_predictions - 1) #Finding the best split
                 error_reductions.append(error_reduction)
             
             #Then: see error reduced if we just create a new stump
             new_tree = Tree(X, y, max_depth=self.max_depth, min_samples = self.min_samples)
-            mean_predictions = np.mean(self._predictions_window, axis = 0)
-            error_reduction = new_tree.get_best_split(X, y, mean_predictions, num_total_predictions) #There are already trees, we don't subtract 1
-            print("Error reduction of new tree: ", error_reduction)
+            mean_predictions = np.mean(self.predictions_window, axis = 0)
+            error_reduction = new_tree.get_best_split(X, y, mean_predictions, num_total_predictions)
             
             if error_reduction <= 0 and max(error_reductions) <= 0:
+                print("No more error reduction possible")
                 break
             elif error_reduction >= max(error_reductions):
-                print("Creating new tree, error reduction: ", error_reduction)
+                print(f"Creating new tree, error reduction: {error_reduction}")
                 new_tree.split(X, y)
                 self.add_new_tree(new_tree)
             else:
-                print(f"Splitting existing tree. Best error reduction: {max(error_reductions)}")
+                print(f"Splitting tree, error reduction: {max(error_reductions)}")
                 best_error_idx = np.argmax(error_reductions)
-                best_tree = self._tree_window[best_error_idx]
+                best_tree = self.tree_window[best_error_idx]
                 best_tree.split(X, y)
-                self._predictions_window[best_error_idx] = best_tree.get_training_predictions()
+                self.predictions_window[best_error_idx] = best_tree.get_training_predictions()
             
-            #Calculate MSE for all trees
-            predictions = self.predict(X)
-            print(f"SSE: {np.sum((y - predictions)**2)}")
+            print(f"SSE: {np.sum((y - self.predict(X))**2)}")
             
-        if len(self._trees) > self.n_trees:
-            print(f"We have created {len(self._trees)} trees")
-            self._trees = self._trees[:-1] #We go until the n+1th tree is created, we just don't return it
-        
+        if len(self.trees) == self.n_trees + 1:
+            #We go until the n+1th tree is created, we just don't return it
+            self.trees = self.trees[:-1]
         return self 
         
 
     def predict(self, X_predict):
         X_predict = check_array(X_predict, accept_sparse=False)
-        check_is_fitted(self, 'n_features_in_')  # raises NotFittedError if missing
+        if not hasattr(self, 'trees') or len(self.trees) == 0:
+            # If somehow called predict without fit
+            return np.zeros(X_predict.shape[0])
         
         """We want to go through each tree and combine predictions"""
         predictions = []
-        for tree in self._trees:
+        for tree in self.trees:
             predictions.append(tree.predict(X_predict))
         return np.mean(predictions, axis = 0)
     
-                

@@ -51,4 +51,23 @@ Thus, though it is considerably more complicated, we can still calculate everyth
     \sum_{i=1}^{n} o_i^2 
 \end{align*}
 
+What if we instead use gradient descent? Instead of setting the predictions to $\mu_n$, 
+can we dynamically calculate it?
+
+Let \[
+E = \sum_{i=1}^n (y_i - \frac{\alpha o_i + \beta_n}{\alpha + 1})^2 
+\]   
+
+Then, we can calculate the best $\beta_n$ via gradient, to get:
+\begin{align*}
+    0 &= \sum_{i=1}^n y_i - \frac{\alpha o_i + \beta_n}{\alpha + 1} \implies \\
+    \sum_{i=1}^n y_i - \frac{\alpha}{\alpha + 1} \sum_{i=1}^{n} o_i &= \frac{n}{\alpha + 1}\beta_n  \implies \\
+    (\alpha + 1)\mu_n - \frac{\alpha}{n} \sum_{i=1}^{n} o_i &= \beta_n
+\end{align*}
+Note that this value is the original non-gradient value of $\beta_n$, $\mu_n$, 
+minus some value. Thus, we can utilize a learning rate, $\epsilon$, to get that \[
+\beta_n = \mu_n - \frac{\epsilon \alpha}{n(\alpha + 1)} \sum_{i=1}^{n} o_i\]
+
+We must recalculate the original error calculation
+
 \end{document}

@@ -3,3 +3,4 @@
 *.fdb*
 *.fls*
 *.gz
+*cpython-311*

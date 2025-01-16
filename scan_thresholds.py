@@ -2,7 +2,6 @@ from numba import njit
 import numpy as np
 
 #Using numba speeds up by factor of 3x
-@njit
 def get_best_sse3(X, y, other_predictions, num_cols_other_predictions, min_samples = 3):
     best_sse = np.inf
     curr_best_col = None
