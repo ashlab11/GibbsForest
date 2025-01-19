@@ -9,7 +9,6 @@ from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 class Dynatree(RegressorMixin, BaseEstimator):
     def __init__(self, n_trees = 10, window = 4, max_depth = 3, min_samples = 2):
         self.n_trees = n_trees
-        print("Initialized")
         
         #Setting the window size
         if window == 'sqrt':
@@ -85,16 +84,13 @@ class Dynatree(RegressorMixin, BaseEstimator):
             new_tree = Tree(X, y, max_depth=self.max_depth, min_samples = self.min_samples)
             mean_predictions = np.mean(self._predictions_window, axis = 0)
             error_reduction = new_tree.get_best_split(X, y, mean_predictions, num_total_predictions) #There are already trees, we don't subtract 1
-            print("Error reduction of new tree: ", error_reduction)
             
             if error_reduction <= 0 and max(error_reductions) <= 0:
                 break
             elif error_reduction >= max(error_reductions):
-                print("Creating new tree, error reduction: ", error_reduction)
                 new_tree.split(X, y)
                 self.add_new_tree(new_tree)
             else:
-                print(f"Splitting existing tree. Best error reduction: {max(error_reductions)}")
                 best_error_idx = np.argmax(error_reductions)
                 best_tree = self._tree_window[best_error_idx]
                 best_tree.split(X, y)
@@ -102,10 +98,8 @@ class Dynatree(RegressorMixin, BaseEstimator):
             
             #Calculate MSE for all trees
             predictions = self.predict(X)
-            print(f"SSE: {np.sum((y - predictions)**2)}")
             
         if len(self._trees) > self.n_trees:
-            print(f"We have created {len(self._trees)} trees")
             self._trees = self._trees[:-1] #We go until the n+1th tree is created, we just don't return it
         
         return self 
@@ -114,6 +108,8 @@ class Dynatree(RegressorMixin, BaseEstimator):
     def predict(self, X_predict):
         X_predict = check_array(X_predict, accept_sparse=False)
         check_is_fitted(self, 'n_features_in_')  # raises NotFittedError if missing
+        print(f"This forest has a total of {sum([tree.num_splits for tree in self._trees])} splits")
+        print(f"This forest has a total of {len(self._trees)} trees")
         
         """We want to go through each tree and combine predictions"""
         predictions = []

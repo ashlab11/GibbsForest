@@ -1,6 +1,6 @@
 import numpy as np
 from line_profiler import profile
-from scan_thresholds import get_best_sse, get_best_sse3
+from scan_thresholds import get_best_sse
 
 class LeafOrNode:
     def __init__(self, y, curr_depth = 0, max_depth = 3, min_samples = 2):
@@ -18,8 +18,9 @@ class LeafOrNode:
         self.curr_best_splitting_val = None
         self.curr_best_error_reduction = None
         self.next_to_split = None
-                
-    def get_best_split(self, X, y, tree_level_predictions, other_predictions, num_cols_other_prediction, 
+     
+         
+    def get_best_split(self, X, y, tree_level_predictions, other_predictions, num_cols_other_prediction, features_to_consider,
                         new_tree = True):
         """Function that gets the best split for a node or leaf, but doesn't split it yet
         Note: new_tree is a boolean that tells us whether we are splitting a new tree or not, 
@@ -27,11 +28,11 @@ class LeafOrNode:
         if self.curr_depth == self.max_depth or len(y) <= self.min_samples:
             return 0 #No error reduction possible
         if self.left == None and self.right == None:
-            return self.get_best_split_leaf(X, y, tree_level_predictions, other_predictions, num_cols_other_prediction, new_tree)
+            return self.get_best_split_leaf(X, y, tree_level_predictions, other_predictions, num_cols_other_prediction, features_to_consider, new_tree)
         else:
-            return self.get_best_split_node(X, y, tree_level_predictions, other_predictions, num_cols_other_prediction)
+            return self.get_best_split_node(X, y, tree_level_predictions, other_predictions, num_cols_other_prediction, features_to_consider)
         
-    def get_best_split_node(self, X, y, tree_level_predictions, other_predictions, num_cols_other_prediction):
+    def get_best_split_node(self, X, y, tree_level_predictions, other_predictions, num_cols_other_prediction, features_to_consider):
         """Function that gets the best split for a node, but doesn't split it yet"""
         left_indices = X[:, self.curr_best_col] <= self.curr_best_splitting_val
         right_indices = ~left_indices
@@ -46,9 +47,9 @@ class LeafOrNode:
         left_y = y[left_indices]
         right_y = y[right_indices]
                 
-        left_best_error_reduction = self.left.get_best_split(left_X, left_y, left_tree_level_predictions, left_other_predictions, num_cols_other_prediction, 
+        left_best_error_reduction = self.left.get_best_split(left_X, left_y, left_tree_level_predictions, left_other_predictions, num_cols_other_prediction, features_to_consider, 
                                                              new_tree = False)
-        right_best_error_reduction = self.right.get_best_split(right_X, right_y, right_tree_level_predictions, right_other_predictions, num_cols_other_prediction, 
+        right_best_error_reduction = self.right.get_best_split(right_X, right_y, right_tree_level_predictions, right_other_predictions, num_cols_other_prediction, features_to_consider,
                                                                new_tree = False)
         
         if left_best_error_reduction > right_best_error_reduction:
@@ -59,8 +60,8 @@ class LeafOrNode:
             self.curr_best_error_reduction = right_best_error_reduction
             self.next_to_split = self.right
             return right_best_error_reduction
-         
-    def get_best_split_leaf(self, X, y, tree_level_predictions, other_predictions, num_cols_other_prediction, new_tree):
+
+    def get_best_split_leaf(self, X, y, tree_level_predictions, other_predictions, num_cols_other_prediction, features_to_consider, new_tree):
         """Function that gets the best split for a leaf, but doesn't split it yet. 
         TBD: Implement gradient descent here"""
         if new_tree:
@@ -70,8 +71,11 @@ class LeafOrNode:
         
         total_error = np.sum((y - old_predictions)**2) #Getting total error that we want to reduce
         
-        best_sse, curr_best_col, curr_best_splitting_val = get_best_sse3(X, y, other_predictions, num_cols_other_prediction, min_samples=self.min_samples)
+        best_sse, curr_best_col, curr_best_splitting_val, left_val, right_val = get_best_sse(X, y, other_predictions, num_cols_other_prediction, 
+                                                                        features_to_consider = features_to_consider, min_samples=self.min_samples)
         best_error_reduction = total_error - best_sse
+        self.left_val = left_val
+        self.right_val = right_val
         self.curr_best_col = curr_best_col
         self.curr_best_splitting_val = curr_best_splitting_val
         
@@ -124,20 +128,29 @@ class LeafOrNode:
             
             return predictions
         
+    def __repr__(self):
+        if self.left == None and self.right == None:
+            return f"Leaf with value {self.val}"
+        return f"Node with splitting value {self.curr_best_splitting_val} and column {self.curr_best_col}"
+        
 class Tree:
     def __init__(self, X, y, min_samples = 2, max_depth = 3):
         self.root = LeafOrNode(y, max_depth = max_depth, min_samples = min_samples)
         self.min_samples = min_samples
         self.max_depth = max_depth
         self.predictions = self.root.predict(X)
-    def get_best_split(self, X, y, other_predictions, num_cols_other_prediction):
-        return self.root.get_best_split(X, y, self.predictions, other_predictions, num_cols_other_prediction) 
+        self.num_splits = 0
+    def get_best_split(self, X, y, other_predictions, num_cols_other_prediction, features_to_consider):
+        return self.root.get_best_split(X, y, self.predictions, other_predictions, num_cols_other_prediction, features_to_consider) 
     def split(self, X, y):
         """Function that splits the tree, keeping predictions up to date"""
         self.root.split(X, y)
         self.predictions = self.root.predict(X)
+        self.num_splits += 1
     def get_training_predictions(self):
         """Function that gets the training predictions"""
         return self.predictions
     def predict(self, X_predict):
         return self.root.predict(X_predict)
+    def __repr__(self):
+        return f"Tree with {self.num_splits} splits"
