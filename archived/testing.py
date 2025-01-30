@@ -21,7 +21,7 @@ X_train, y_train = create_regression_data(1000, 3)
 X_test, y_test = create_regression_data(100, 3)
 
 X, y = make_regression(
-            n_samples=20000,
+            n_samples=2000,
             n_features=10,
             n_informative=3,
             bias=5.0,
@@ -31,8 +31,7 @@ X, y = make_regression(
 X = StandardScaler().fit_transform(X)
 
 start = time.time()
-forest = Dynatree(n_trees = 100, window = 15, max_depth = 4, feature_subsampling_pct=0.2)
-
+forest = Dynatree(n_trees = 100, window = 50, max_depth = 3, feature_subsampling_pct=0.5)
 def main():
     forest.fit(X, y)
     score = forest.score(X, y)
@@ -42,7 +41,9 @@ def main():
     average_covariance = np.mean(np.corrcoef(predictions))
     
     squared_bias = np.mean((np.mean(predictions, axis = 0) - y)**2)
-    variances = np.mean((predictions - ensemble_predictions)**2, axis = 0)
+    squared_bias_by_tree = np.mean(np.mean((predictions - y)**2, axis = 1))
+    # Variance (per sample, then averaged)
+    variances = np.var(predictions, axis=0)  # Variance across trees for each sample
     variance = np.mean(variances)
     
     pairwise_corrs = []
@@ -57,6 +58,7 @@ def main():
     print(f"score, {score}")
     #Bias
     print(f"Squared Bias: {squared_bias}")
+    print(f"Squared Bias by tree: {squared_bias_by_tree}")
     print(f"Variance: {variance}")
     print(f"Covariance: {average_covariance}")
     print(f"Total Error: {total_error}")
@@ -73,6 +75,8 @@ def rforest():
     average_covariance = np.mean(np.corrcoef(predictions))
     
     squared_bias = np.mean((np.mean(predictions, axis = 0) - y)**2)
+    squared_bias_by_tree = np.mean(np.mean((predictions - y)**2, axis = 1))
+
     variances = np.mean((predictions - ensemble_predictions)**2, axis = 0)
     variance = np.mean(variances)
     
@@ -88,6 +92,7 @@ def rforest():
     print(f"score, {score}")
     #Bias
     print(f"Squared Bias: {squared_bias}")
+    print(f"Squared Bias by tree: {squared_bias_by_tree}")
     print(f"Variance: {variance}")
     print(f"Covariance: {average_covariance}")
     print(f"Total Error: {total_error}")

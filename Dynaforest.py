@@ -12,7 +12,6 @@ class Dynatree(RegressorMixin, BaseEstimator):
         self.n_trees = n_trees
         self.feature_subsampling_pct = feature_subsampling_pct
         self.bootstrapping = bootstrapping
-        
         #Setting the window size
         if window == 'sqrt':
             self.window = int(np.sqrt(n_trees))
@@ -40,6 +39,8 @@ class Dynatree(RegressorMixin, BaseEstimator):
     def fit(self, X, y):
         X, y = check_X_y(X, y, accept_sparse=False)
         self.n_features_in_ = X.shape[1]  # for sklearn compliance
+        self.feature_importances_ = np.zeros(self.n_features_in_)
+        self.feature_splits = np.zeros(self.n_features_in_)
         self.num_features_considering = max(int(self.n_features_in_ * self.feature_subsampling_pct), 1)
         
         self._trees = []
@@ -49,6 +50,7 @@ class Dynatree(RegressorMixin, BaseEstimator):
         y = np.array(y)
         bootstrapped_X = X
         bootstrapped_y = y
+        times_without_improvement = 0
         
         for i in range(self.n_trees):
             if self.bootstrapping:
@@ -68,9 +70,10 @@ class Dynatree(RegressorMixin, BaseEstimator):
             self._predictions[i] = tree.get_training_predictions()
                 
         while True:
-            error_reductions = np.zeros(self.window)
-            random_idx = random.sample(range(self.n_trees), self.window)
-            predictions_to_consider = self._predictions[random_idx]
+            error_reductions = []
+            idxs_to_consider = random.sample(range(self.n_trees), self.window)
+            predictions_to_consider = self._predictions[idxs_to_consider]
+            splitting_cols = []
             
             if self.bootstrapping:
                 bootstrapped_idx = np.random.choice(len(X), len(X), replace = True)
@@ -79,22 +82,33 @@ class Dynatree(RegressorMixin, BaseEstimator):
             
             features_to_consider = random.sample(range(self.n_features_in_), self.num_features_considering)
             
-            
-            for idx in range(self.window):
-                tree = self._trees[random_idx[idx]]
-                predictions_without_tree = np.delete(predictions_to_consider, idx, 0)
+            for considering_idx, overall_idx in enumerate(idxs_to_consider):
+                tree = self._trees[overall_idx]
+                predictions_without_tree = np.delete(predictions_to_consider, considering_idx, 0)
                 if len(predictions_without_tree) == 0:
                     mean_predictions_without_tree = np.zeros(len(y))
                 else:
                     mean_predictions_without_tree = np.mean(predictions_without_tree, axis = 0)
-                error_reductions[idx] = tree.get_best_split(bootstrapped_X, bootstrapped_y, mean_predictions_without_tree, self.window - 1, 
-                                                            features_to_consider)
+                    
+                error_reduction, best_split = tree.get_best_split(bootstrapped_X, bootstrapped_y, mean_predictions_without_tree, self.window - 1, 
+                                                                  features_to_consider)
+                error_reductions.append(error_reduction)
+                splitting_cols.append(best_split)
+                
             if max(error_reductions) <= 0:
-                break
+                times_without_improvement += 1
+                if times_without_improvement >= 10:
+                    break
+                continue
             best_error_idx = np.argmax(error_reductions)
-            best_tree = self._trees[random_idx[best_error_idx]]
+            best_col = splitting_cols[best_error_idx]
+            
+            self.feature_importances_[best_col] += max(error_reductions)
+            self.feature_splits[best_col] += 1
+            
+            best_tree = self._trees[idxs_to_consider[best_error_idx]]
             best_tree.split(bootstrapped_X, bootstrapped_y)
-            self._predictions[random_idx[best_error_idx]] = best_tree.get_training_predictions()
+            self._predictions[idxs_to_consider[best_error_idx]] = best_tree.get_training_predictions()
             
         return self 
         
@@ -110,5 +124,3 @@ class Dynatree(RegressorMixin, BaseEstimator):
         for tree in self._trees:
             predictions.append(tree.predict(X_predict))
         return np.mean(predictions, axis = 0)
-    
-                

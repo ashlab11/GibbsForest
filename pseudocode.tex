@@ -1,0 +1,106 @@
+\documentclass{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{enumerate}     % for custom lists
+\usepackage{graphicx}
+
+\begin{document}
+
+\section*{Dynaforest: High-Level Pseudocode}
+
+\paragraph{Notation and Setup}
+\begin{itemize}
+    \item $n\_trees$: Number of trees in the forest.
+    \item $window$: Number of trees to consider in each optimization step.
+    \item $max\_depth$: Maximum depth of each tree.
+    \item $min\_samples$: Minimum number of samples required to allow a split.
+    \item $feature\_subsampling\_pct$: Fraction of the feature set considered for each split.
+    \item $bootstrapping$: Boolean; if true, each tree is trained on a bootstrap sample of the data.
+    \item $X \in \mathbb{R}^{N \times d}$: Training features (with $N$ samples and $d$ features).
+    \item $y \in \mathbb{R}^{N}$: Training target values.
+\end{itemize}
+
+\section*{1. Initialization}
+\begin{enumerate}[(a)]
+    \item Read hyperparameters: $n\_trees, window, max\_depth, min\_samples, feature\_subsampling\_pct, bootstrapping$.
+    \item Compute the number of features to consider in each split:
+    \[
+        \text{num\_features\_considering} = 
+        \max\Bigl(\lfloor d \cdot \text{feature\_subsampling\_pct} \rfloor, 1\Bigr).
+    \]
+\end{enumerate}
+
+\section*{2. Fit Phase}
+
+\paragraph{Input:} Training set $(X, y)$.
+
+\begin{enumerate}[(a)]
+    \item \textbf{Initialize Trees}:
+
+    \begin{enumerate}[(i)]
+        \item For $i = 1$ to $n\_trees$:
+        \begin{enumerate}
+            \item If $bootstrapping$ is \texttt{True}, draw a bootstrap sample $(X_i, y_i)$ of the same size as $(X, y)$.
+            \item Randomly select \(\text{num\_features\_considering}\) features from the $d$ available.
+            \item Create a new tree $T_i$ (initially a \textit{stump}).
+            \item Call \(\text{get\_best\_split}(X_i, y_i)\) on $T_i$ to find the best root split. 
+            \item Split $T_i$ once, creating left and right children.
+            \item Store $T_i$ in the forest.
+            \item Record $T_i$'s predictions on the full training set.
+        \end{enumerate}
+    \end{enumerate}
+
+    \item \textbf{Iterative Optimization}:
+
+    \begin{enumerate}[(i)]
+        \item \textbf{Repeat until no improvement}:
+        \begin{enumerate}
+            \item Randomly pick a subset of $window$ trees, $\{T_{i_1}, T_{i_2}, \ldots, T_{i_{window}}\}$.
+            \item For each tree $T_{i_k}$ in this subset:
+            \begin{enumerate}
+                \item Compute the temporary ensemble mean of the \textit{other} $window - 1$ trees:
+                \[
+                    \hat{y}_{-k} = \frac{1}{\text{window} - 1}
+                       \sum_{\substack{j \in \{i_1,\dots\}, j \neq i_k}} T_j(X).
+                \]
+                \item Call $\text{get\_best\_split}(T_{i_k}, \hat{y}_{-k})$ to evaluate potential error reduction.
+                \item Store the \textit{error reduction} for $T_{i_k}$.
+            \end{enumerate}
+            \item If all recorded error reductions $\le 0$, \textbf{stop} (no further gain).
+            \item Otherwise, choose $T_{best}$ with the \textbf{largest positive} error reduction.
+            \item Split $T_{best}$ on its best split candidate.
+            \item Update $T_{best}$'s predictions on the training set.
+        \end{enumerate}
+    \end{enumerate}
+\end{enumerate}
+
+\section*{3. Predict Phase}
+
+\paragraph{Input:} Test data $X_{\text{test}}$.
+\begin{enumerate}[(a)]
+    \item For each tree $T_i$ in the forest:
+    \[
+      \hat{y}_i = T_i(X_{\text{test}}).
+    \]
+    \item Compute the ensemble prediction by averaging:
+    \[
+      \hat{y}_{\text{ensemble}} = \frac{1}{n\_trees} \sum_{i=1}^{n\_trees} \hat{y}_i.
+    \]
+    \item Return $\hat{y}_{\text{ensemble}}$ as the final prediction.
+\end{enumerate}
+
+\section*{4. Notes on the Algorithm}
+
+\begin{itemize}
+    \item \textbf{Forest-Level Splitting:}
+    Unlike standard random forests, where each tree grows independently, the \textit{Dynatree} approach selects which tree to split based on which candidate tree-split reduces the \textit{ensemble} mean-squared error the most.
+    \item \textbf{Reducing Bias \& Correlation:}
+    \begin{enumerate}
+        \item By involving partial ensemble predictions (\(\hat{y}_{-k}\)) when determining splits, the approach can better reduce overall bias.
+        \item Bootstrapping and feature subsampling help ensure the trees remain partially de-correlated, reducing variance in the ensemble.
+    \end{enumerate}
+    \item \textbf{Stopping Criterion:}
+    The process halts when additional splits in a random subset of trees no longer reduce the ensemble error.
+\end{itemize}
+
+\end{document}
