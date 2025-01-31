@@ -9,8 +9,6 @@ from sklearn.preprocessing import StandardScaler
 import xgboost as xgb
 from line_profiler import profile
 
-
-
 def create_regression_data(n_points, n_features):
     X = np.random.rand(n_points, n_features)
     y = X[:, 0] * 5 + np.sign(X[:, 1]) + np.sin(X[:, 2]) + 1 + np.random.randn(n_points)

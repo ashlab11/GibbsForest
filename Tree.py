@@ -3,19 +3,14 @@ from line_profiler import profile
 from scan_thresholds import get_best_sse
 
 class LeafOrNode:
-    def __init__(self, y, curr_depth = 0, max_depth = 3, min_samples = 2):
+    def __init__(self, val, curr_depth = 0, max_depth = 3, min_samples = 2, delta = 0.1):
         self.left = None
         self.right = None
         self.max_depth = max_depth
         self.min_samples = min_samples
         self.curr_depth = curr_depth
-        
-        #Here, we get the value of the leaf.
-        #I will implement gradient descent on this later
-        if len(y) < min_samples:
-            print("Warning: Empty leaf")
-        self.val = np.mean(y)
-        
+        self.val = val
+        self.delta = delta
         self.curr_best_col = None
         self.curr_best_splitting_val = None
         self.curr_best_error_reduction = None
@@ -76,11 +71,15 @@ class LeafOrNode:
         
         total_error = np.sum((y - old_predictions)**2) #Getting total error that we want to reduce
         
-        best_sse, curr_best_col, curr_best_splitting_val = get_best_sse(X, y, other_predictions, num_cols_other_prediction, 
-                                                                        features_to_consider = features_to_consider, min_samples=self.min_samples)
+        
+        best_sse, curr_best_col, curr_best_splitting_val, left_val, right_val = get_best_sse(X, y, other_predictions, num_cols_other_prediction, 
+                                                                        features_to_consider = features_to_consider, min_samples=self.min_samples, 
+                                                                        delta = self.delta)
         best_error_reduction = total_error - best_sse
         self.curr_best_col = curr_best_col
         self.curr_best_splitting_val = curr_best_splitting_val
+        self.left_val = left_val
+        self.right_val = right_val
             
         return best_error_reduction, curr_best_col
         
@@ -106,11 +105,15 @@ class LeafOrNode:
                     self.right.split(right_X, right_y)
                 
     def split_leaf(self, X, y):
+        "For comparison when delta = 0"
         left_y = y[X[:, self.curr_best_col] <= self.curr_best_splitting_val]
         right_y = y[X[:, self.curr_best_col] > self.curr_best_splitting_val]
+        
+        delta_0_left_val = np.mean(left_y)
+        delta_0_right_val = np.mean(right_y)
           
-        self.left = LeafOrNode(left_y, curr_depth= self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples)
-        self.right = LeafOrNode(right_y, curr_depth = self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples)
+        self.left = LeafOrNode(self.left_val, curr_depth= self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, delta = self.delta)
+        self.right = LeafOrNode(self.right_val, curr_depth = self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, delta = self.delta)
         return None
      
     def predict(self, X_predict = None):

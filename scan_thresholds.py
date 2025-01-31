@@ -2,16 +2,16 @@ import numpy as np
 from line_profiler import profile
 import warnings
 
-@profile
-def get_best_sse(X, y, other_predictions, num_cols_other_prediction, features_to_consider, min_samples = 2, delta = 0):
-    #print("Function called")
+def get_best_sse(X, y, other_predictions, num_cols_other_prediction, features_to_consider, min_samples = 2, delta = 0.1):
     if len(X) < 2 * min_samples:
-        return (np.inf, None, None) #No error reduction possible
+        return (np.inf, None, None, None, None) #No error reduction possible
     
     alpha = num_cols_other_prediction #naming easier, we'll be using it a lot
     best_sse = np.inf
     curr_best_col = None
     curr_best_splitting_val = None
+    left_val = None
+    right_val = None
     
     for col in features_to_consider: #Going through each column
         sort_idx = np.argsort(X[:, col])
@@ -60,19 +60,25 @@ def get_best_sse(X, y, other_predictions, num_cols_other_prediction, features_to
         #THIS IS PROBLEM!! INDICES AREN'T WORKING HERE FOR SOME REASON! FIX THIS!
         unique_idx = np.sum(valid_mask) - 1 - np.unique(X_col_sorted[valid_mask][::-1], return_index = True)[1] #Tested, this is correct
                 
-        try: 
-            best_sse_idx_in_sse = np.argmin(sse[unique_idx]) #Get the best sse index in the unique indices
-        except:
-            print(f"At this point, sse is {sse} and unique_idx is {unique_idx}")
+        best_sse_idx_in_sse = np.argmin(sse[unique_idx]) #Get the best sse index in the unique indices
         actual_best_idx = unique_idx[best_sse_idx_in_sse]
         if sse[actual_best_idx] < best_sse:
             best_sse = sse[actual_best_idx]
             curr_best_col = col
             curr_best_splitting_val = X_col_sorted[valid_mask][actual_best_idx]
+            "Need to figure out how to calculate left_val and right_val, then return them"
+            left_idx = X_col_sorted <= curr_best_splitting_val
+            right_idx = ~left_idx
+            
+            left_y, right_y = y_sorted[left_idx], y_sorted[right_idx]
+            left_other_predictions, right_other_predictions = other_predictions_sorted[left_idx], other_predictions_sorted[right_idx]
+            
+            left_val = (1 + delta * alpha) * np.mean(left_y) - delta * alpha * np.mean(left_other_predictions)
+            right_val = (1 + delta * alpha) * np.mean(right_y) - delta * alpha * np.mean(right_other_predictions)
                    
             if np.sum([X_col_sorted <= curr_best_splitting_val]) < min_samples or np.sum([X_col_sorted > curr_best_splitting_val]) < min_samples:
                 print(f"X_sorted is {X_col_sorted}, while valid_mask is {valid_mask}. The length of sse is {len(sse)}, versus {len(X_col_sorted)}")
                 print(f"Not enough samples on one side. Samples on left side: {np.sum([X_col_sorted <= curr_best_splitting_val])}, samples on right side: {np.sum([X_col_sorted > curr_best_splitting_val])}")
     
-    return best_sse, curr_best_col, curr_best_splitting_val
+    return best_sse, curr_best_col, curr_best_splitting_val, left_val, right_val
 
