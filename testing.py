@@ -31,7 +31,7 @@ X, y = make_regression(
 X = StandardScaler().fit_transform(X)
 
 start = time.time()
-forest = Dynatree(n_trees = 100, window = 50, max_depth = 3, feature_subsampling_pct=0.5)
+forest = Dynatree(n_trees = 100, window = 3, max_depth = 3, feature_subsampling_pct=0.5)
 def main():
     forest.fit(X, y)
     score = forest.score(X, y)

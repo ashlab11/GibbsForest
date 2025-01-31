@@ -71,21 +71,21 @@ other predictions to the value of the split.
 \begin{align*}
     E &= \\
     \sum_{i=1}^n \left(y_i - \frac{\alpha o_i + \frac{(1 - \epsilon)Y_n}{n} + \epsilon \beta_n}{\alpha + 1} \right)^2 &= \\
-    \sum_{i=1}^n \left(y_i - \frac{\alpha o_i + \frac{(1 - \epsilon)Y_n}{n} + \epsilon \frac{Y_n(\alpha + 1)}{n} - \frac{\alpha O_n}{n}}{\alpha + 1} \right)^2 &= \\
-    \sum_{i=1}^n \left(y_i - \frac{\alpha o_i + \frac{Y_n - \epsilon Y_n + \epsilon \alpha Y_n + \epsilon Y_n}{n} - \frac{\alpha O_n}{n}}{\alpha + 1} \right)^2 &= \\
-    \sum_{i=1}^n \left(y_i - \frac{\alpha o_i + \frac{Y_n + \epsilon \alpha Y_n}{n} - \frac{\alpha O_n}{n}}{\alpha + 1} \right)^2 &= \\
-    \sum_{i=1}^n \left(\left(y_i - \frac{\alpha}{\alpha + 1}o_i\right) - \frac{\frac{Y_n + \epsilon \alpha Y_n}{n} - \frac{\alpha O_n}{n}}{\alpha + 1} \right)^2 &= \\
-    \sum_{i=1}^n \left(y_i - \frac{\alpha}{\alpha + 1}o_i\right)^2 - 2\frac{\frac{Y_n + \epsilon \alpha Y_n}{n} - \frac{\alpha O_n}{n}}{\alpha + 1}\left(y_i - \frac{\alpha}{\alpha + 1}o_i\right) + \left( \frac{\frac{Y_n + \epsilon \alpha Y_n}{n} - \frac{\alpha O_n}{n}}{\alpha + 1}\right)^2
+    \sum_{i=1}^n \left(y_i - \frac{\alpha o_i + \frac{(1 - \epsilon)Y_n}{n} + \epsilon \frac{Y_n(\alpha + 1)}{n} - \epsilon \frac{\alpha O_n}{n}}{\alpha + 1} \right)^2 &= \\
+    \sum_{i=1}^n \left(y_i - \frac{\alpha o_i + \frac{Y_n - \epsilon Y_n + \epsilon \alpha Y_n + \epsilon Y_n}{n} - \epsilon \frac{\alpha O_n}{n}}{\alpha + 1} \right)^2 &= \\
+    \sum_{i=1}^n \left(y_i - \frac{\alpha o_i + \frac{Y_n + \epsilon \alpha Y_n}{n} - \epsilon \frac{\alpha O_n}{n}}{\alpha + 1} \right)^2 &= \\
+    \sum_{i=1}^n \left(\left(y_i - \frac{\alpha}{\alpha + 1}o_i\right) - \frac{\frac{Y_n + \epsilon \alpha Y_n}{n} - \epsilon \frac{\alpha O_n}{n}}{\alpha + 1} \right)^2 &= \\
+    \sum_{i=1}^n \left(y_i - \frac{\alpha}{\alpha + 1}o_i\right)^2 - 2\frac{\frac{Y_n + \epsilon \alpha Y_n}{n} - \epsilon \frac{\alpha O_n}{n}}{\alpha + 1}\left(y_i - \frac{\alpha}{\alpha + 1}o_i\right) + \left( \frac{\frac{Y_n + \epsilon \alpha Y_n}{n} - \epsilon \frac{\alpha O_n}{n}}{\alpha + 1}\right)^2
 \end{align*}
 
 We can define \begin{align*}
     A_i &= y_i - \frac{\alpha}{\alpha + 1}o_i \\
-    B_n &= \frac{\frac{Y_n + \epsilon \alpha Y_n}{n} - \frac{\alpha O_n}{n}}{\alpha + 1} = \frac{\frac{(1 + \epsilon \alpha)\sum_{i=1}^n y_i}{n} - \frac{\alpha \sum_{i=1}^n o_i}{n}}{\alpha + 1}
+    B_n &= \frac{Y_n + \epsilon \alpha Y_n - \epsilon \alpha O_n}{\alpha + 1} = \frac{(1 + \epsilon \alpha)\sum_{i=1}^n y_i - \epsilon \alpha \sum_{i=1}^n o_i}{\alpha + 1}
 \end{align*}
 
 Then, \begin{align*}
     E &= \\
-    \sum_{i=1}^n A_i^2 - 2B_n\sum_{i=1}^n A_i + B_n^2
+    \sum_{i=1}^n A_i^2 - 2\frac{1}{n} B_n\sum_{i=1}^n A_i + \frac{B_n^2}{n}
 \end{align*}
 
 All of which can be calculated with cumulative sums.

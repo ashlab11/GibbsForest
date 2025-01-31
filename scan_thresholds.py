@@ -1,11 +1,12 @@
 import numpy as np
 from line_profiler import profile
+import warnings
 
 @profile
-def get_best_sse(X, y, other_predictions, num_cols_other_prediction, features_to_consider, min_samples = 3):
+def get_best_sse(X, y, other_predictions, num_cols_other_prediction, features_to_consider, min_samples = 2, delta = 0):
     #print("Function called")
     if len(X) < 2 * min_samples:
-        return (np.inf, -1, -1) #No error reduction possible
+        return (np.inf, None, None) #No error reduction possible
     
     alpha = num_cols_other_prediction #naming easier, we'll be using it a lot
     best_sse = np.inf
@@ -18,24 +19,7 @@ def get_best_sse(X, y, other_predictions, num_cols_other_prediction, features_to
         y_sorted = y[sort_idx]
         other_predictions_sorted = other_predictions[sort_idx]
         
-        
-        #Calculating prefix/suffix sums, extremely useful for speeding up calculations
-        prefix_sum_y = np.cumsum(y_sorted)
-        prefix_sum_y_squared = np.cumsum(np.square(y_sorted))
-        prefix_sum_other_predictions = np.cumsum(other_predictions_sorted)
-        prefix_sum_other_predictions_squared = np.cumsum(np.square(other_predictions_sorted))
-        prefix_sum_multiplication = np.cumsum(np.multiply(y_sorted, other_predictions_sorted))
-        prefix_idxs = np.arange(1, len(y_sorted) + 1)
-        
-        suffix_sum_y = prefix_sum_y[-1] - prefix_sum_y        
-        suffix_sum_y_squared = prefix_sum_y_squared[-1] - prefix_sum_y_squared
-        suffix_sum_other_predictions = prefix_sum_other_predictions[-1] - prefix_sum_other_predictions
-        suffix_sum_other_predictions_squared = prefix_sum_other_predictions_squared[-1] - prefix_sum_other_predictions_squared
-        suffix_sum_multiplication = prefix_sum_multiplication[-1] - prefix_sum_multiplication
-        suffix_idxs = prefix_idxs[-1] - prefix_idxs
-        
         #We only consider splits with more than min_samples on each side, after accounting for uniqueness
-        #FIX THIS PART! you need to account for uniqueness in the indices, otherwise you'll end up with not enough values on each side
         X_unique_sorted = np.unique(X_col_sorted)
         if len(X_unique_sorted) < 2 * min_samples:
             continue
@@ -43,39 +27,31 @@ def get_best_sse(X, y, other_predictions, num_cols_other_prediction, features_to
         valid_mask = np.logical_and(X_col_sorted >= X_unique_sorted[min_samples - 1], X_col_sorted < X_unique_sorted[-min_samples]) 
         
         if not np.any(valid_mask):
-            continue    
-    
-        prefix_sum_y = prefix_sum_y[valid_mask]
-        prefix_sum_y_squared = prefix_sum_y_squared[valid_mask]
-        prefix_sum_other_predictions = prefix_sum_other_predictions[valid_mask]
-        prefix_sum_other_predictions_squared = prefix_sum_other_predictions_squared[valid_mask]
-        prefix_sum_multiplication = prefix_sum_multiplication[valid_mask]
-        prefix_idxs = prefix_idxs[valid_mask]
+            continue  
         
-        suffix_sum_y = suffix_sum_y[valid_mask]
-        suffix_sum_y_squared = suffix_sum_y_squared[valid_mask]
-        suffix_sum_other_predictions = suffix_sum_other_predictions[valid_mask]
-        suffix_sum_other_predictions_squared = suffix_sum_other_predictions_squared[valid_mask]
-        suffix_sum_multiplication = suffix_sum_multiplication[valid_mask]
-        suffix_idxs = suffix_idxs[valid_mask]
-                
-        #Look at cumsum.pdf for derivation of these formulas
-        left_error = (prefix_sum_y_squared -
-                      (2*alpha) / (alpha + 1) * prefix_sum_multiplication -
-                      2 / (alpha + 1) * prefix_sum_y**2 / prefix_idxs + 
-                        prefix_sum_other_predictions_squared * (alpha / (alpha + 1))**2 + 
-                         (2*alpha) / (alpha + 1)**2 * prefix_sum_y * prefix_sum_other_predictions / prefix_idxs + 
-                         prefix_sum_y**2 / prefix_idxs * 1/(alpha + 1)**2) 
+        #Early calculations for prefix/suffix sums, extremely useful for gradient calcs
+        #Derivations can be found in cumsum.pdf
+        A_i = y_sorted - alpha / (alpha + 1) * other_predictions_sorted
+        A_n_prefix = np.cumsum(A_i)
+        A_n_prefix_squared = np.cumsum(A_i**2)
+        B_n_prefix = ((1 + delta * alpha) * np.cumsum(y_sorted) - delta * alpha * np.cumsum(other_predictions_sorted)) / (1 + alpha)
+        prefix_idxs = np.arange(1, len(y_sorted) + 1)
         
-        right_error = (suffix_sum_y_squared -
-                        (2*alpha) / (alpha + 1) * suffix_sum_multiplication -
-                        2 / (alpha + 1) * suffix_sum_y**2 / suffix_idxs +
-                        suffix_sum_other_predictions_squared * (alpha / (alpha + 1))**2 +
-                        (2*alpha) / (alpha + 1)**2 * suffix_sum_y * suffix_sum_other_predictions / suffix_idxs +
-                        suffix_sum_y**2 / suffix_idxs * 1/(alpha + 1)**2) 
+        A_n_suffix = A_n_prefix[-1] - A_n_prefix
+        A_n_suffix_squared = A_n_prefix_squared[-1] - A_n_prefix_squared
+        B_n_suffix = B_n_prefix[-1] - B_n_prefix
+        suffix_idxs = prefix_idxs[-1] - prefix_idxs
         
-        sse = left_error + right_error
-                
+        with warnings.catch_warnings():
+            """For optimization purposes, we apply the valid mask afterwards, but this means we have some division by 0.
+            We use warnings to catch these."""
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            left_sse = A_n_prefix_squared - 2 * B_n_prefix / prefix_idxs * A_n_prefix + B_n_prefix**2 / prefix_idxs
+            right_sse = A_n_suffix_squared - 2 * B_n_suffix / suffix_idxs * A_n_suffix + B_n_suffix**2 / suffix_idxs
+        
+        sse = left_sse + right_sse
+        sse = sse[valid_mask]
+        
         #We only want to consider the splits when y is at the end of an X value, not in the middle
         #This is because our prefix splits contain X (<= and >), but our suffix splits don't
         #So, we get the last unique indices (or first unique when reversed)
