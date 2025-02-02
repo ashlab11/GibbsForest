@@ -58,8 +58,13 @@ def get_best_sse(X, y, other_predictions, num_cols_other_prediction, features_to
         # Apply the custom unique_with_index
         
         #THIS IS PROBLEM!! INDICES AREN'T WORKING HERE FOR SOME REASON! FIX THIS!
-        unique_idx = np.sum(valid_mask) - 1 - np.unique(X_col_sorted[valid_mask][::-1], return_index = True)[1] #Tested, this is correct
-                
+        unique_idx_1 = np.sum(valid_mask) - 1 - np.unique(X_col_sorted[valid_mask][::-1], return_index = True)[1] #Tested, this is correct
+        #The following is what chatgpt suggested
+        diffs = np.r_[True, np.diff(X_col_sorted[valid_mask]) != 0]
+        unique_idx = np.where(diffs)[0]
+        
+        #print(f"It is {np.array_equal(unique_idx, unique_idx_1)} that the two unique indices are equal")
+               
         best_sse_idx_in_sse = np.argmin(sse[unique_idx]) #Get the best sse index in the unique indices
         actual_best_idx = unique_idx[best_sse_idx_in_sse]
         if sse[actual_best_idx] < best_sse:

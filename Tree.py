@@ -1,6 +1,7 @@
 import numpy as np
 from line_profiler import profile
 from scan_thresholds import get_best_sse
+import random
 
 class LeafOrNode:
     def __init__(self, val, curr_depth = 0, max_depth = 3, min_samples = 2, delta = 0.1):
@@ -141,14 +142,15 @@ class LeafOrNode:
         return f"Node with splitting value {self.curr_best_splitting_val} and column {self.curr_best_col}"
         
 class Tree:
-    def __init__(self, X, y, min_samples = 2, max_depth = 3):
-        self.root = LeafOrNode(y, max_depth = max_depth, min_samples = min_samples)
+    def __init__(self, X, y, num_features_considering = 1, min_samples = 2, max_depth = 3, delta = 0):
+        self.root = LeafOrNode(y, max_depth = max_depth, min_samples = min_samples, delta = delta)
         self.min_samples = min_samples
         self.max_depth = max_depth
         self.predictions = self.root.predict(X)
         self.num_splits = 0
-    def get_best_split(self, X, y, other_predictions, num_cols_other_prediction, features_to_consider):
-        return self.root.get_best_split(X, y, self.predictions, other_predictions, num_cols_other_prediction, features_to_consider) 
+        self.features_considered = random.sample(range(X.shape[1]), num_features_considering)
+    def get_best_split(self, X, y, other_predictions, num_cols_other_prediction):
+        return self.root.get_best_split(X, y, self.predictions, other_predictions, num_cols_other_prediction, self.features_considered) 
     def split(self, X, y):
         """Function that splits the tree, keeping predictions up to date"""
         self.root.split(X, y)
