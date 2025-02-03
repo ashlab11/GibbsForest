@@ -21,13 +21,16 @@ def get_best_sse(X, y, other_predictions, num_cols_other_prediction, features_to
         
         #We only consider splits with more than min_samples on each side, after accounting for uniqueness
         X_unique_sorted = np.unique(X_col_sorted)
-        if len(X_unique_sorted) < 2 * min_samples:
-            continue
-        #work with prefix ids or smth similar here, should be one line?
-        valid_mask = np.logical_and(X_col_sorted >= X_unique_sorted[min_samples - 1], X_col_sorted < X_unique_sorted[-min_samples]) 
         
-        if not np.any(valid_mask):
-            continue  
+        #We only want to consider the splits when y is at the end of an X value, not in the middle
+        #We also care about unique values, so we need to find the last unique index -- this does both
+        #Min samples 2, [1, 1, 1, 1, 2, 2, 3, 3] -> [3, 5]
+        placements = np.searchsorted(X_col_sorted, X_unique_sorted, side='right') - 1
+        placements_correct = [placement for placement in placements if placement >= (min_samples - 1) and placement < len(X_col_sorted) - min_samples]
+
+        if len(placements_correct) == 0:
+            # No valid splits for this column given the min_samples restriction.
+            continue
         
         #Early calculations for prefix/suffix sums, extremely useful for gradient calcs
         #Derivations can be found in cumsum.pdf
@@ -50,27 +53,12 @@ def get_best_sse(X, y, other_predictions, num_cols_other_prediction, features_to
             right_sse = A_n_suffix_squared - 2 * B_n_suffix / suffix_idxs * A_n_suffix + B_n_suffix**2 / suffix_idxs
         
         sse = left_sse + right_sse
-        sse = sse[valid_mask]
-        
-        #We only want to consider the splits when y is at the end of an X value, not in the middle
-        #This is because our prefix splits contain X (<= and >), but our suffix splits don't
-        #So, we get the last unique indices (or first unique when reversed)
-        # Apply the custom unique_with_index
-        
-        #THIS IS PROBLEM!! INDICES AREN'T WORKING HERE FOR SOME REASON! FIX THIS!
-        unique_idx_1 = np.sum(valid_mask) - 1 - np.unique(X_col_sorted[valid_mask][::-1], return_index = True)[1] #Tested, this is correct
-        #The following is what chatgpt suggested
-        diffs = np.r_[True, np.diff(X_col_sorted[valid_mask]) != 0]
-        unique_idx = np.where(diffs)[0]
-        
-        #print(f"It is {np.array_equal(unique_idx, unique_idx_1)} that the two unique indices are equal")
-               
-        best_sse_idx_in_sse = np.argmin(sse[unique_idx]) #Get the best sse index in the unique indices
-        actual_best_idx = unique_idx[best_sse_idx_in_sse]
-        if sse[actual_best_idx] < best_sse:
-            best_sse = sse[actual_best_idx]
+                       
+        best_idx = placements_correct[np.argmin(sse[placements_correct])]
+        if sse[best_idx] < best_sse:
+            best_sse = sse[best_idx]
             curr_best_col = col
-            curr_best_splitting_val = X_col_sorted[valid_mask][actual_best_idx]
+            curr_best_splitting_val = X_col_sorted[best_idx]
             "Need to figure out how to calculate left_val and right_val, then return them"
             left_idx = X_col_sorted <= curr_best_splitting_val
             right_idx = ~left_idx
@@ -80,10 +68,6 @@ def get_best_sse(X, y, other_predictions, num_cols_other_prediction, features_to
             
             left_val = (1 + delta * alpha) * np.mean(left_y) - delta * alpha * np.mean(left_other_predictions)
             right_val = (1 + delta * alpha) * np.mean(right_y) - delta * alpha * np.mean(right_other_predictions)
-                   
-            if np.sum([X_col_sorted <= curr_best_splitting_val]) < min_samples or np.sum([X_col_sorted > curr_best_splitting_val]) < min_samples:
-                print(f"X_sorted is {X_col_sorted}, while valid_mask is {valid_mask}. The length of sse is {len(sse)}, versus {len(X_col_sorted)}")
-                print(f"Not enough samples on one side. Samples on left side: {np.sum([X_col_sorted <= curr_best_splitting_val])}, samples on right side: {np.sum([X_col_sorted > curr_best_splitting_val])}")
     
     return best_sse, curr_best_col, curr_best_splitting_val, left_val, right_val
 

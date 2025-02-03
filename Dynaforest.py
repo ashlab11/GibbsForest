@@ -56,8 +56,8 @@ class Dynatree(RegressorMixin, BaseEstimator):
         
         X = np.array(X)
         y = np.array(y)
-        bootstrapped_X = X
-        bootstrapped_y = y
+        bootstrapped_X = X.copy()
+        bootstrapped_y = y.copy()
         times_without_improvement = 0
         
         for i in range(self.n_trees):
@@ -82,10 +82,11 @@ class Dynatree(RegressorMixin, BaseEstimator):
             predictions_to_consider = self._predictions[idxs_to_consider]
             splitting_cols = []
             
+            #ADD THIS PART
             if self.bootstrapping:
                 bootstrapped_idx = np.random.choice(len(X), len(X), replace = True)
-                bootstrapped_X = X[bootstrapped_idx]
-                bootstrapped_y = y[bootstrapped_idx]
+                bootstrapped_X = np.copy(X[bootstrapped_idx])
+                bootstrapped_y = np.copy(y[bootstrapped_idx])
                         
             for considering_idx, overall_idx in enumerate(idxs_to_consider):
                 tree = self._trees[overall_idx]

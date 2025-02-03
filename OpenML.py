@@ -50,11 +50,11 @@ param_dist_dynatree = {
     'n_trees': randint(20, 100),
     'max_depth': randint(2, 6),
     'min_samples': randint(2, 10),
-    'delta': loguniform(0.0001, 1),
+    'delta': loguniform(0.001, 1),
     'window': ['sqrt', 'log2', 4, 8, 16],
 }
 
-def run_experiment(X, y, model, param_dist, seed, n_iter = 10):
+def run_experiment(X, y, model, param_dist, seed, n_iter = 20):
     """Choose best hyperparameters for a model on a task"""
     
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, random_state = seed)
@@ -69,7 +69,7 @@ def run_experiment(X, y, model, param_dist, seed, n_iter = 10):
     
 num_datasets = 1
 error_array = np.zeros((num_datasets, 3))
-param_array = [[{}] * 3] * num_datasets
+param_array = [[{} for _ in range(3)] for _ in range(num_datasets)]
 for run_num in range(num_datasets):
     task_id = small_tasks_ids[run_num]
     task = openml.tasks.get_task(task_id)

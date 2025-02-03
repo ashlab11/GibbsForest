@@ -153,7 +153,11 @@ class Tree:
         return self.root.get_best_split(X, y, self.predictions, other_predictions, num_cols_other_prediction, self.features_considered) 
     def split(self, X, y):
         """Function that splits the tree, keeping predictions up to date"""
-        self.root.split(X, y)
+        try:
+            self.root.split(X, y)
+        except:
+            print("Error in splitting")
+            print(f"Features considered: {self.features_considered}")
         self.predictions = self.root.predict(X)
         self.num_splits += 1
     def get_training_predictions(self):
