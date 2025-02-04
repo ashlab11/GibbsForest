@@ -72,7 +72,6 @@ class LeafOrNode:
         
         total_error = np.sum((y - old_predictions)**2) #Getting total error that we want to reduce
         
-        
         best_sse, curr_best_col, curr_best_splitting_val, left_val, right_val = get_best_sse(X, y, other_predictions, num_cols_other_prediction, 
                                                                         features_to_consider = features_to_consider, min_samples=self.min_samples, 
                                                                         delta = self.delta)
@@ -106,18 +105,12 @@ class LeafOrNode:
                     self.right.split(right_X, right_y)
                 
     def split_leaf(self, X, y):
-        "For comparison when delta = 0"
-        left_y = y[X[:, self.curr_best_col] <= self.curr_best_splitting_val]
-        right_y = y[X[:, self.curr_best_col] > self.curr_best_splitting_val]
-        
-        delta_0_left_val = np.mean(left_y)
-        delta_0_right_val = np.mean(right_y)
-          
         self.left = LeafOrNode(self.left_val, curr_depth= self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, delta = self.delta)
         self.right = LeafOrNode(self.right_val, curr_depth = self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, delta = self.delta)
         return None
      
     def predict(self, X_predict = None):
+        """Function that predicts the values for a given X_predict. If conducted in training mode, we can set new predictions"""
         if self.left == None and self.right == None:
             return np.ones(len(X_predict)) * self.val
         else:
@@ -133,7 +126,7 @@ class LeafOrNode:
             predictions = np.zeros(len(X_predict))
             predictions[left_indices] = left_predictions
             predictions[right_indices] = right_predictions
-            
+    
             return predictions
         
     def __repr__(self):
@@ -143,26 +136,17 @@ class LeafOrNode:
         
 class Tree:
     def __init__(self, X, y, num_features_considering = 1, min_samples = 2, max_depth = 3, delta = 0):
-        self.root = LeafOrNode(y, max_depth = max_depth, min_samples = min_samples, delta = delta)
+        self.root = LeafOrNode(np.mean(y), max_depth = max_depth, min_samples = min_samples, delta = delta)
         self.min_samples = min_samples
         self.max_depth = max_depth
-        self.predictions = self.root.predict(X)
         self.num_splits = 0
         self.features_considered = random.sample(range(X.shape[1]), num_features_considering)
-    def get_best_split(self, X, y, other_predictions, num_cols_other_prediction):
-        return self.root.get_best_split(X, y, self.predictions, other_predictions, num_cols_other_prediction, self.features_considered) 
+    def get_best_split(self, X, y, tree_predictions, other_predictions, num_cols_other_prediction):
+        return self.root.get_best_split(X, y, tree_predictions, other_predictions, num_cols_other_prediction, self.features_considered) 
     def split(self, X, y):
-        """Function that splits the tree, keeping predictions up to date"""
-        try:
-            self.root.split(X, y)
-        except:
-            print("Error in splitting")
-            print(f"Features considered: {self.features_considered}")
-        self.predictions = self.root.predict(X)
+        """Function that splits the tree"""
+        self.root.split(X, y)
         self.num_splits += 1
-    def get_training_predictions(self):
-        """Function that gets the training predictions"""
-        return self.predictions
     def predict(self, X_predict):
         return self.root.predict(X_predict)
     def __repr__(self):

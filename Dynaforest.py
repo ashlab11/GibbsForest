@@ -71,32 +71,34 @@ class Dynatree(RegressorMixin, BaseEstimator):
             #Note: must use bagging/subsampling to get better results here, should figure out how to do so?
             tree = Tree(bootstrapped_X, bootstrapped_y, num_features_considering = self.num_features_considering, 
                         max_depth=self.max_depth, min_samples = self.min_samples, delta = self.delta)
-            tree.get_best_split(bootstrapped_X, bootstrapped_y, np.zeros(len(y)), 0)
+            #Initial split -- no current tree-level predictions, and no predictions from any other splits
+            tree.get_best_split(bootstrapped_X, bootstrapped_y, np.zeros(len(y)), np.zeros(len(y)), 0)
             tree.split(bootstrapped_X, bootstrapped_y)
             self._trees.append(tree)
-            self._predictions[i] = tree.get_training_predictions()
+            
+            #Predictions should be based on X, not bootstrapped_X
+            #TODO: implement feature importance here
+            self._predictions[i] = tree.predict(X)
                 
         while True:
             error_reductions = []
             idxs_to_consider = random.sample(range(self.n_trees), self.window)
             predictions_to_consider = self._predictions[idxs_to_consider]
             splitting_cols = []
-            
-            #ADD THIS PART
-            if self.bootstrapping:
-                bootstrapped_idx = np.random.choice(len(X), len(X), replace = True)
-                bootstrapped_X = np.copy(X[bootstrapped_idx])
-                bootstrapped_y = np.copy(y[bootstrapped_idx])
                         
             for considering_idx, overall_idx in enumerate(idxs_to_consider):
                 tree = self._trees[overall_idx]
+                
+                #Get the predictions of everything else as well as current preds from the tree
                 predictions_without_tree = np.delete(predictions_to_consider, considering_idx, 0)
+                tree_level_predictions = predictions_to_consider[considering_idx]
+                
                 if len(predictions_without_tree) == 0:
                     mean_predictions_without_tree = np.zeros(len(y))
                 else:
                     mean_predictions_without_tree = np.mean(predictions_without_tree, axis = 0)
-                    
-                error_reduction, best_split = tree.get_best_split(bootstrapped_X, bootstrapped_y, mean_predictions_without_tree, self.window - 1)
+                        
+                error_reduction, best_split = tree.get_best_split(X, y, tree_level_predictions, mean_predictions_without_tree, self.window - 1)
                 error_reductions.append(error_reduction)
                 splitting_cols.append(best_split)
                 
@@ -112,8 +114,8 @@ class Dynatree(RegressorMixin, BaseEstimator):
             self.feature_splits[best_col] += 1
             
             best_tree = self._trees[idxs_to_consider[best_error_idx]]
-            best_tree.split(bootstrapped_X, bootstrapped_y)
-            self._predictions[idxs_to_consider[best_error_idx]] = best_tree.get_training_predictions()
+            best_tree.split(X, y)
+            self._predictions[idxs_to_consider[best_error_idx]] = best_tree.predict(X)
             
         return self 
         
