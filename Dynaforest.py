@@ -63,6 +63,7 @@ class Dynatree(RegressorMixin, BaseEstimator):
             tree = Tree(bootstrapped_X, bootstrapped_y, num_features_considering = self.num_features_considering, 
                         max_depth=self.max_depth, min_samples = self.min_samples, delta = self.delta)
             #Initial split -- no current tree-level predictions, and no predictions from any other splits
+            #TODO: implement warmup depth here
             tree.get_best_split(bootstrapped_X, bootstrapped_y, np.zeros(len(y)), np.zeros(len(y)), 0)
             tree.split(bootstrapped_X, bootstrapped_y)
             self._trees.append(tree)
