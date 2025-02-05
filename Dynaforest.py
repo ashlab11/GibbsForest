@@ -7,13 +7,12 @@ from sklearn.metrics import r2_score
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
 class Dynatree(RegressorMixin, BaseEstimator):
-    def __init__(self, n_trees = 10, window = 4, max_depth = 3, min_samples = 2, 
-                 feature_subsampling_pct = 1, bootstrapping = True, delta = 0):
+    def __init__(self, n_trees = 10, max_depth = 3, min_samples = 2, 
+                 feature_subsampling_pct = 1, warmup_depth = 1, delta = 0):
         self.n_trees = n_trees
         self.delta = delta
+        self.warmup_depth = warmup_depth
         self.feature_subsampling_pct = feature_subsampling_pct
-        self.bootstrapping = bootstrapping
-        self.window = window
         self.max_depth = max_depth
         self.min_samples = min_samples
     
@@ -21,15 +20,8 @@ class Dynatree(RegressorMixin, BaseEstimator):
         X, y = check_X_y(X, y, accept_sparse=False)
         self.n_features_in_ = X.shape[1]  # for sklearn compliance
         
-        #Setting the window size
-        if self.window == 'sqrt':
-            self.window = int(np.sqrt(self.n_trees))
-        elif self.window == 'log2':
-            self.window = int(np.log2(self.n_trees))
-        elif int(self.window) == self.window:
-            self.window = self.window
-        else:
-            raise ValueError("window must be an integer or sqrt")
+        if self.n_trees is None or self.n_trees < 2:
+            raise ValueError('n_trees must be an integer greater than 1')
         
         #Setting the max depth
         if self.max_depth is None:
@@ -58,13 +50,12 @@ class Dynatree(RegressorMixin, BaseEstimator):
         y = np.array(y)
         bootstrapped_X = X.copy()
         bootstrapped_y = y.copy()
-        times_without_improvement = 0
-        
+
+        #Initial tree creation and warmup levels        
         for i in range(self.n_trees):
-            if self.bootstrapping:
-                bootstrapped_idx = np.random.choice(len(X), len(X), replace = True)
-                bootstrapped_X = X[bootstrapped_idx]
-                bootstrapped_y = y[bootstrapped_idx]
+            bootstrapped_idx = np.random.choice(len(X), len(X), replace = True)
+            bootstrapped_X = X[bootstrapped_idx]
+            bootstrapped_y = y[bootstrapped_idx]
             
                         
             """Creating all trees as stumps first"""
@@ -72,6 +63,7 @@ class Dynatree(RegressorMixin, BaseEstimator):
             tree = Tree(bootstrapped_X, bootstrapped_y, num_features_considering = self.num_features_considering, 
                         max_depth=self.max_depth, min_samples = self.min_samples, delta = self.delta)
             #Initial split -- no current tree-level predictions, and no predictions from any other splits
+            #TODO: implement warmup depth here
             tree.get_best_split(bootstrapped_X, bootstrapped_y, np.zeros(len(y)), np.zeros(len(y)), 0)
             tree.split(bootstrapped_X, bootstrapped_y)
             self._trees.append(tree)
@@ -79,44 +71,20 @@ class Dynatree(RegressorMixin, BaseEstimator):
             #Predictions should be based on X, not bootstrapped_X
             #TODO: implement feature importance here
             self._predictions[i] = tree.predict(X)
+              
+        #Round-robin -- with max_depth = N and initial depth D, we should have 2^N - 2^D splits
+        for _ in range(2**self.max_depth - 2**self.warmup_depth):
+            for tree_idx, tree in enumerate(self._trees):
+                predictions_without_tree = np.delete(self._predictions, tree_idx, 0)
+                tree_level_predictions = self._predictions[tree_idx]
+                mean_predictions_without_tree = np.mean(predictions_without_tree, axis = 0)
                 
-        while True:
-            error_reductions = []
-            idxs_to_consider = random.sample(range(self.n_trees), self.window)
-            predictions_to_consider = self._predictions[idxs_to_consider]
-            splitting_cols = []
-                        
-            for considering_idx, overall_idx in enumerate(idxs_to_consider):
-                tree = self._trees[overall_idx]
-                
-                #Get the predictions of everything else as well as current preds from the tree
-                predictions_without_tree = np.delete(predictions_to_consider, considering_idx, 0)
-                tree_level_predictions = predictions_to_consider[considering_idx]
-                
-                if len(predictions_without_tree) == 0:
-                    mean_predictions_without_tree = np.zeros(len(y))
-                else:
-                    mean_predictions_without_tree = np.mean(predictions_without_tree, axis = 0)
-                        
-                error_reduction, best_split = tree.get_best_split(X, y, tree_level_predictions, mean_predictions_without_tree, self.window - 1)
-                error_reductions.append(error_reduction)
-                splitting_cols.append(best_split)
-                
-            if max(error_reductions) <= 0:
-                times_without_improvement += 1
-                if times_without_improvement >= 10:
-                    break
-                continue
-            best_error_idx = np.argmax(error_reductions)
-            best_col = splitting_cols[best_error_idx]
-            
-            self.feature_importances_[best_col] += max(error_reductions)
-            self.feature_splits[best_col] += 1
-            
-            best_tree = self._trees[idxs_to_consider[best_error_idx]]
-            best_tree.split(X, y)
-            self._predictions[idxs_to_consider[best_error_idx]] = best_tree.predict(X)
-            
+                error_reduction, best_split = tree.get_best_split(X, y, tree_level_predictions, mean_predictions_without_tree, self.n_trees - 1)
+                if error_reduction > 0:
+                    tree.split(X, y)
+                    self._predictions[tree_idx] = tree.predict(X)
+                    self.feature_importances_[best_split] += error_reduction
+                    self.feature_splits[best_split] += 1
         return self 
         
 
