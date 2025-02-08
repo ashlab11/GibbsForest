@@ -1,12 +1,10 @@
 import numpy as np
 import random
-from Tree import Tree
-from line_profiler import profile
+from .Tree import Tree
 from sklearn.base import BaseEstimator, RegressorMixin
-from sklearn.metrics import r2_score
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
-class Dynatree(RegressorMixin, BaseEstimator):
+class GibbsForest(RegressorMixin, BaseEstimator):
     def __init__(self, n_trees = 10, max_depth = 3, min_samples = 2, 
                  feature_subsampling_pct = 1, warmup_depth = 1, delta = 0):
         self.n_trees = n_trees
@@ -74,7 +72,9 @@ class Dynatree(RegressorMixin, BaseEstimator):
               
         #Round-robin -- with max_depth = N and initial depth D, we should have 2^N - 2^D splits
         for _ in range(2**self.max_depth - 2**self.warmup_depth):
-            for tree_idx, tree in enumerate(self._trees):
+            tree_permutation = np.random.permutation(self.n_trees)
+            for tree_idx in tree_permutation:
+                tree = self._trees[tree_idx]
                 predictions_without_tree = np.delete(self._predictions, tree_idx, 0)
                 tree_level_predictions = self._predictions[tree_idx]
                 mean_predictions_without_tree = np.mean(predictions_without_tree, axis = 0)

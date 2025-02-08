@@ -1,6 +1,6 @@
 import numpy as np
-from line_profiler import profile
-from scan_thresholds import get_best_sse
+from .scan_thresholds import get_best_sse, get_best_sse_arbitary
+from .Losses import *
 import random
 
 class LeafOrNode:
@@ -75,6 +75,21 @@ class LeafOrNode:
         best_sse, curr_best_col, curr_best_splitting_val, left_val, right_val = get_best_sse(X, y, other_predictions, num_cols_other_prediction, 
                                                                         features_to_consider = features_to_consider, min_samples=self.min_samples, 
                                                                         delta = self.delta)
+        
+        test_best_gain, test_best_col, test_best_splitting_val, test_left_val, test_right_val = get_best_sse_arbitary(
+            X, y, other_predictions, num_cols_other_prediction, features_to_consider = features_to_consider, min_samples=self.min_samples,
+            delta = self.delta, loss_fn=LeastSquaresLoss())
+        
+        #Check if the two methods agree
+        if curr_best_col == test_best_col and curr_best_splitting_val == test_best_splitting_val:
+            print("Methods agree")
+        elif curr_best_col == test_best_col and curr_best_splitting_val != test_best_splitting_val:
+            print("Methods disagree, but only on splitting value")
+        else:
+            print("Methods disagree")
+            print(f"Original: {curr_best_col}, {curr_best_splitting_val}")
+            print(f"Arbitary: {test_best_col}, {test_best_splitting_val}")
+                
         best_error_reduction = total_error - best_sse
         self.curr_best_col = curr_best_col
         self.curr_best_splitting_val = curr_best_splitting_val
@@ -133,21 +148,3 @@ class LeafOrNode:
         if self.left == None and self.right == None:
             return f"Leaf with value {self.val}"
         return f"Node with splitting value {self.curr_best_splitting_val} and column {self.curr_best_col}"
-        
-class Tree:
-    def __init__(self, X, y, num_features_considering = 1, min_samples = 2, max_depth = 3, delta = 0):
-        self.root = LeafOrNode(np.mean(y), max_depth = max_depth, min_samples = min_samples, delta = delta)
-        self.min_samples = min_samples
-        self.max_depth = max_depth
-        self.num_splits = 0
-        self.features_considered = random.sample(range(X.shape[1]), num_features_considering)
-    def get_best_split(self, X, y, tree_predictions, other_predictions, num_cols_other_prediction):
-        return self.root.get_best_split(X, y, tree_predictions, other_predictions, num_cols_other_prediction, self.features_considered) 
-    def split(self, X, y):
-        """Function that splits the tree"""
-        self.root.split(X, y)
-        self.num_splits += 1
-    def predict(self, X_predict):
-        return self.root.predict(X_predict)
-    def __repr__(self):
-        return f"Tree with {self.num_splits} splits"
