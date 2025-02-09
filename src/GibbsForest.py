@@ -76,7 +76,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
 
         #Initial tree creation and warmup levels        
         for i in range(self.n_trees):
-            bootstrapped_idx = np.random.choice(len(X), len(X), replace = True)
+            bootstrapped_idx = np.random.choice(len(X), self.num_rows_considering, replace = True)
             bootstrapped_X = X[bootstrapped_idx]
             bootstrapped_y = y[bootstrapped_idx]
                         
