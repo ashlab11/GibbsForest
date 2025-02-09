@@ -8,8 +8,7 @@ from sklearn.metrics import mean_absolute_error
 from openml.tasks import list_tasks, TaskType
 from sklearn.ensemble import RandomForestRegressor
 from xgboost import XGBRegressor
-import Dynaforest
-from Dynaforest import Dynatree
+from src import GibbsForest
 import logging
 import json
 
@@ -27,8 +26,8 @@ for task_id, task_value in regression_tasks.items():
         
 #Fix warnings
 logging.getLogger("openml.extensions.sklearn.extension").setLevel(logging.ERROR)
-if not hasattr(Dynaforest, '__version__'):
-    Dynaforest.__version__ = "0.0.1"  # Use an appropriate version number
+if not hasattr(GibbsForest, '__version__'):
+    GibbsForest.__version__ = "0.0.1"  # Use an appropriate version number
 
 #Create parameter distributions to pull from
 param_dist_rf = {
