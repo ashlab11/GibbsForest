@@ -6,8 +6,8 @@ from .LeafOrNode import LeafOrNode
 import random
         
 class Tree:
-    def __init__(self, X, y, num_features_considering = 1, min_samples = 2, max_depth = 3, delta = 0):
-        self.root = LeafOrNode(np.mean(y), max_depth = max_depth, min_samples = min_samples, delta = delta)
+    def __init__(self, X, y, num_features_considering = 1, min_samples = 2, max_depth = 3, eta = 0):
+        self.root = LeafOrNode(np.mean(y), max_depth = max_depth, min_samples = min_samples, eta = eta)
         self.min_samples = min_samples
         self.max_depth = max_depth
         self.num_splits = 0

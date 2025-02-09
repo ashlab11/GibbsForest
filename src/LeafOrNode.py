@@ -4,14 +4,14 @@ from .Losses import *
 import random
 
 class LeafOrNode:
-    def __init__(self, val, curr_depth = 0, max_depth = 3, min_samples = 2, delta = 0.1):
+    def __init__(self, val, curr_depth = 0, max_depth = 3, min_samples = 2, eta = 0.1):
         self.left = None
         self.right = None
         self.max_depth = max_depth
         self.min_samples = min_samples
         self.curr_depth = curr_depth
         self.val = val
-        self.delta = delta
+        self.eta = eta
         self.curr_best_col = None
         self.curr_best_splitting_val = None
         self.curr_best_error_reduction = None
@@ -74,21 +74,21 @@ class LeafOrNode:
         
         best_sse, curr_best_col, curr_best_splitting_val, left_val, right_val = get_best_sse(X, y, other_predictions, num_cols_other_prediction, 
                                                                         features_to_consider = features_to_consider, min_samples=self.min_samples, 
-                                                                        delta = self.delta)
+                                                                        eta = self.eta)
         
         test_best_gain, test_best_col, test_best_splitting_val, test_left_val, test_right_val = get_best_sse_arbitary(
             X, y, other_predictions, num_cols_other_prediction, features_to_consider = features_to_consider, min_samples=self.min_samples,
-            delta = self.delta, loss_fn=LeastSquaresLoss())
+            eta = self.eta, loss_fn=LeastSquaresLoss())
         
         #Check if the two methods agree
-        if curr_best_col == test_best_col and curr_best_splitting_val == test_best_splitting_val:
+        """if curr_best_col == test_best_col and curr_best_splitting_val == test_best_splitting_val:
             print("Methods agree")
         elif curr_best_col == test_best_col and curr_best_splitting_val != test_best_splitting_val:
             print("Methods disagree, but only on splitting value")
         else:
             print("Methods disagree")
             print(f"Original: {curr_best_col}, {curr_best_splitting_val}")
-            print(f"Arbitary: {test_best_col}, {test_best_splitting_val}")
+            print(f"Arbitary: {test_best_col}, {test_best_splitting_val}")"""
                 
         best_error_reduction = total_error - best_sse
         self.curr_best_col = curr_best_col
@@ -120,8 +120,8 @@ class LeafOrNode:
                     self.right.split(right_X, right_y)
                 
     def split_leaf(self, X, y):
-        self.left = LeafOrNode(self.left_val, curr_depth= self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, delta = self.delta)
-        self.right = LeafOrNode(self.right_val, curr_depth = self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, delta = self.delta)
+        self.left = LeafOrNode(self.left_val, curr_depth= self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, eta = self.eta)
+        self.right = LeafOrNode(self.right_val, curr_depth = self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, eta = self.eta)
         return None
      
     def predict(self, X_predict = None):
