@@ -30,7 +30,7 @@ def get_best_sse_arbitrary(X, y, other_predictions, leaf_weight, num_cols_other_
     G = np.sum(g_i)
     H = np.sum(h_i)
     
-    prev_gain = 1 / 2 * (G + init * reg_lambda) ** 2 / (H + reg_lambda * (alpha + 1)**2)
+    prev_gain = 1 / 2 * (G + (alpha + 1) * init * reg_lambda) ** 2 / (H + reg_lambda * (alpha + 1)**2)
     for col in features_to_consider:
         sort_idx = np.argsort(X[:, col])
         X_col_sorted = X[:, col][sort_idx]
@@ -58,8 +58,8 @@ def get_best_sse_arbitrary(X, y, other_predictions, leaf_weight, num_cols_other_
         G_R = G_L[-1] - G_L
         H_R = H_L[-1] - H_L
         
-        left_gain = 1 / 2 * (G_L + init * reg_lambda) ** 2 / (H_L + (alpha + 1) * reg_lambda**2)
-        right_gain = 1 / 2 * (G_R + init * reg_lambda) ** 2 / (H_R + (alpha + 1) * reg_lambda**2)
+        left_gain = 1 / 2 * (G_L + (alpha + 1) * init * reg_lambda) ** 2 / (H_L + (alpha + 1) * reg_lambda**2)
+        right_gain = 1 / 2 * (G_R + (alpha + 1) * init * reg_lambda) ** 2 / (H_R + (alpha + 1) * reg_lambda**2)
         
         gain = prev_gain - left_gain - right_gain
         best_idx = placements_correct[np.argmax(gain[placements_correct])]
