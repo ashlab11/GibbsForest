@@ -86,7 +86,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
                         max_depth=self.max_depth, min_samples = self.min_samples, eta = self.eta)
             #Initial split -- no current tree-level predictions, and no predictions from any other splits
             #TODO: implement warmup depth here
-            tree.get_best_split(bootstrapped_X, bootstrapped_y, np.zeros(len(y)), np.zeros(len(y)), 0)
+            tree.get_best_split(bootstrapped_X, bootstrapped_y, np.zeros(self.num_rows_considering), np.zeros(self.num_rows_considering), 0)
             tree.split(bootstrapped_X, bootstrapped_y)
             self._trees.append(tree)
             

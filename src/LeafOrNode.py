@@ -1,5 +1,5 @@
 import numpy as np
-from .scan_thresholds import get_best_sse, get_best_sse_arbitary
+from .scan_thresholds import get_best_sse, get_best_gain_arbitrary
 from .Losses import *
 import random
 
@@ -76,19 +76,19 @@ class LeafOrNode:
                                                                         features_to_consider = features_to_consider, min_samples=self.min_samples, 
                                                                         eta = self.eta)
         
-        test_best_gain, test_best_col, test_best_splitting_val, test_left_val, test_right_val = get_best_sse_arbitary(
-            X, y, other_predictions, num_cols_other_prediction, features_to_consider = features_to_consider, min_samples=self.min_samples,
-            eta = self.eta, loss_fn=LeastSquaresLoss())
+        test_best_gain, test_best_col, test_best_splitting_val, test_left_val, test_right_val = get_best_gain_arbitrary(
+            X, y, self.val, other_predictions, num_cols_other_prediction, features_to_consider = features_to_consider, min_samples=self.min_samples,
+            eta = self.eta, loss_fn=LeastSquaresLoss(), initial_weight='argmin')
         
         #Check if the two methods agree
-        """if curr_best_col == test_best_col and curr_best_splitting_val == test_best_splitting_val:
+        if curr_best_col == test_best_col and curr_best_splitting_val == test_best_splitting_val:
             print("Methods agree")
         elif curr_best_col == test_best_col and curr_best_splitting_val != test_best_splitting_val:
             print("Methods disagree, but only on splitting value")
         else:
             print("Methods disagree")
             print(f"Original: {curr_best_col}, {curr_best_splitting_val}")
-            print(f"Arbitary: {test_best_col}, {test_best_splitting_val}")"""
+            print(f"Arbitary: {test_best_col}, {test_best_splitting_val}")
                 
         best_error_reduction = total_error - best_sse
         self.curr_best_col = curr_best_col

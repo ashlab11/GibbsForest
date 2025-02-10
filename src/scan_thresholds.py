@@ -2,7 +2,7 @@ import numpy as np
 from line_profiler import profile
 import warnings
 
-def get_best_sse_arbitrary(X, y, other_predictions, leaf_weight, num_cols_other_predictions, features_to_consider, loss_fn, 
+def get_best_gain_arbitrary(X, y, other_predictions, leaf_weight, num_cols_other_predictions, features_to_consider, loss_fn, 
                              min_samples = 2, eta = 0.1, reg_lambda = 0, initial_weight = 'parent'):
     if len(X) < 2 * min_samples:
         return (np.inf, None, None, None, None)
@@ -58,8 +58,12 @@ def get_best_sse_arbitrary(X, y, other_predictions, leaf_weight, num_cols_other_
         G_R = G_L[-1] - G_L
         H_R = H_L[-1] - H_L
         
-        left_gain = 1 / 2 * (G_L + (alpha + 1) * init * reg_lambda) ** 2 / (H_L + (alpha + 1) * reg_lambda**2)
-        right_gain = 1 / 2 * (G_R + (alpha + 1) * init * reg_lambda) ** 2 / (H_R + (alpha + 1) * reg_lambda**2)
+        with warnings.catch_warnings():
+            """For optimization purposes, we apply the valid mask afterwards, but this means we have some division by 0.
+            We use warnings to catch these."""
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            left_gain = 1 / 2 * (G_L + (alpha + 1) * init * reg_lambda) ** 2 / (H_L + (alpha + 1) * reg_lambda**2)
+            right_gain = 1 / 2 * (G_R + (alpha + 1) * init * reg_lambda) ** 2 / (H_R + (alpha + 1) * reg_lambda**2)
         
         gain = prev_gain - left_gain - right_gain
         best_idx = placements_correct[np.argmax(gain[placements_correct])]
