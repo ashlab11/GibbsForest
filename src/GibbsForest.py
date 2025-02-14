@@ -7,7 +7,7 @@ from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
 class GibbsForest(RegressorMixin, BaseEstimator):
-    def __init__(self, loss_fn = LeastSquaresLoss, n_trees = 10, max_depth = 3, min_samples = 2, 
+    def __init__(self, loss_fn = LeastSquaresLoss(), n_trees = 10, max_depth = 3, min_samples = 2, 
                  feature_subsample = 1, row_subsample = 1, warmup_depth = 1, eta = 0.01, 
                  reg_lambda = 0, reg_gamma = 0, initial_weight = 'parent'):
         """
@@ -86,11 +86,10 @@ class GibbsForest(RegressorMixin, BaseEstimator):
                         max_depth=self.max_depth, min_samples = self.min_samples, eta = self.eta)
             #Initial split -- no current tree-level predictions, and no predictions from any other splits
             #TODO: implement warmup depth here
-            tree.get_best_split(bootstrapped_X, bootstrapped_y, np.zeros(self.num_rows_considering), np.zeros(self.num_rows_considering), 0)
-            tree.split(bootstrapped_X, bootstrapped_y)
+            tree.get_best_split(bootstrapped_X, bootstrapped_y, np.zeros(self.num_rows_considering), 0)
+            tree.split(bootstrapped_X, bootstrapped_y)            
             self._trees.append(tree)
             
-            #Predictions should be based on X, not bootstrapped_X
             #TODO: implement feature importance here
             self._predictions[i] = tree.predict(X)
               
@@ -113,10 +112,9 @@ class GibbsForest(RegressorMixin, BaseEstimator):
             for tree_idx in tree_permutation:
                 tree = self._trees[tree_idx]
                 predictions_without_tree = np.delete(batch_predictions, tree_idx, 0)
-                tree_level_predictions = batch_predictions[tree_idx]
                 mean_predictions_without_tree = np.mean(predictions_without_tree, axis = 0)
                 
-                error_reduction, best_split = tree.get_best_split(X_batch, y_batch, tree_level_predictions, mean_predictions_without_tree, self.n_trees - 1)
+                error_reduction, best_split = tree.get_best_split(X_batch, y_batch, mean_predictions_without_tree, self.n_trees - 1)
                 if error_reduction > self.reg_gamma:
                     tree.split(X_batch, y_batch)
                     
@@ -127,6 +125,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
                     #Updating feature importances and splits
                     self.feature_importances_[best_split] += error_reduction
                     self.feature_splits[best_split] += 1
+        
         return self 
         
 

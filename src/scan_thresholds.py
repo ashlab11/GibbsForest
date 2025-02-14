@@ -2,10 +2,46 @@ import numpy as np
 from line_profiler import profile
 import warnings
 
-def get_best_gain_arbitrary(X, y, other_predictions, leaf_weight, num_cols_other_predictions, features_to_consider, loss_fn, 
-                             min_samples = 2, eta = 0.1, reg_lambda = 0, initial_weight = 'parent'):
+def find_split(X, y, other_predictions, leaf_weight, num_cols_other_predictions, features_to_consider, loss_fn, 
+                             min_samples = 2, eta = 0.1, reg_lambda = 0, initial_weight = 'parent', eps = 1e-6):
+    """A generic second-order-split approach a la GBM, 
+    for any twice-differentiable 'loss_fn'.
+
+    Parameters
+    ----------
+    X : ndarray, shape (n_samples, n_features)
+    y : ndarray, shape (n_samples,)
+    other_predictions : ndarray, shape (n_samples,)
+    The predictions from the rest of the ensemble (i.e. alpha many).
+    parent_leaf_weight : float
+        The parent's weight (w in your notes). 
+    num_cols_other_preds : int
+        The alpha (number of other trees in ensemble).
+    loss_fn : object 
+        Must implement .gradient(target, pred), .hessian(target, pred), and .argmin(target).
+    features_to_consider : list of int
+        Indices of columns to consider as potential splits.
+    min_samples : int
+        Minimum #samples required in each child for a valid split.
+    eta : float
+        Learning rate scaling factor.
+    reg_lambda : float
+        L2 regularization.
+    initial_weight : 'parent' or 'argmin'
+        Whether each child is built around the parent's weight or 
+        we reset each child to local argmin of that child’s y. 
+    eps : float
+        Small offset to avoid dividing by zero in Hessians.
+    Returns
+    -------
+    best_gain : float
+    best_col : int
+    best_split_val : float
+    left_child_weight : float
+    right_child_weight : float"""
+    
     if len(X) < 2 * min_samples:
-        return (np.inf, None, None, None, None)
+        return (-np.inf, None, None, None, None)
     
     alpha = num_cols_other_predictions #naming easier, we'll be using it a lot
     best_gain = -np.inf
@@ -26,18 +62,17 @@ def get_best_gain_arbitrary(X, y, other_predictions, leaf_weight, num_cols_other
     previous_predictions = (alpha * other_predictions + init) / (1 + alpha)
     g_i = loss_fn.gradient(y, previous_predictions)
     h_i = loss_fn.hessian(y, previous_predictions)
-    
+     
     G = np.sum(g_i)
-    H = np.sum(h_i)
+    H = np.sum(h_i) + eps
     
-    prev_gain = 1 / 2 * (G + (alpha + 1) * init * reg_lambda) ** 2 / (H + reg_lambda * (alpha + 1)**2)
+    prev_score = 1 / 2 * (G + (alpha + 1) * init * reg_lambda) ** 2 / (H + reg_lambda * (alpha + 1)**2)
     for col in features_to_consider:
         sort_idx = np.argsort(X[:, col])
         X_col_sorted = X[:, col][sort_idx]
         
         #We only consider splits with more than min_samples on each side, after accounting for uniqueness
         X_unique_sorted = np.unique(X_col_sorted)
-
         
         g_i_sorted = g_i[sort_idx]
         h_i_sorted = h_i[sort_idx]
@@ -53,19 +88,21 @@ def get_best_gain_arbitrary(X, y, other_predictions, leaf_weight, num_cols_other
                 continue
             
         #Prefix/suffix sums for gradient/hessian
+        
         G_L = np.cumsum(g_i_sorted)
-        H_L = np.cumsum(h_i_sorted)
+        H_L = np.cumsum(h_i_sorted) + eps
         G_R = G_L[-1] - G_L
-        H_R = H_L[-1] - H_L
+        H_R = H_L[-1] - H_L + eps
         
         with warnings.catch_warnings():
             """For optimization purposes, we apply the valid mask afterwards, but this means we have some division by 0.
             We use warnings to catch these."""
             warnings.simplefilter("ignore", category=RuntimeWarning)
-            left_gain = 1 / 2 * (G_L + (alpha + 1) * init * reg_lambda) ** 2 / (H_L + (alpha + 1) * reg_lambda**2)
-            right_gain = 1 / 2 * (G_R + (alpha + 1) * init * reg_lambda) ** 2 / (H_R + (alpha + 1) * reg_lambda**2)
+            left_score = 1 / 2 * (G_L + (alpha + 1) * init * reg_lambda) ** 2 / (H_L + (alpha + 1)**2 * reg_lambda)
+            right_score = 1 / 2 * (G_R + (alpha + 1) * init * reg_lambda) ** 2 / (H_R + (alpha + 1)**2 * reg_lambda)
         
-        gain = prev_gain - left_gain - right_gain
+        #Gain is NEGATIVE loss
+        gain = left_score + right_score - prev_score
         best_idx = placements_correct[np.argmax(gain[placements_correct])]
         
         if gain[best_idx] > best_gain:
@@ -87,72 +124,16 @@ def get_best_gain_arbitrary(X, y, other_predictions, leaf_weight, num_cols_other
             
             left_val = left_init + eta * left_delta
             right_val = right_init + eta * right_delta
-
-        return best_gain, curr_best_col, curr_best_splitting_val, left_val, right_val
+            
+    #Calculate actual gain, then return
+    error_before = loss_fn(y, (alpha * other_predictions + init) / (1 + alpha))
+    left_error = loss_fn(y[X[:, curr_best_col] <= curr_best_splitting_val], (alpha * other_predictions[X[:, curr_best_col] <= curr_best_splitting_val] + left_val) / (1 + alpha))
+    right_error = loss_fn(y[X[:, curr_best_col] > curr_best_splitting_val], (alpha * other_predictions[X[:, curr_best_col] > curr_best_splitting_val] + right_val) / (1 + alpha))
+    error_after = left_error + right_error
+    actual_gain = error_before - error_after
     
-
-def get_best_sse_arbitary(X, y, other_predictions, num_cols_other_prediction, features_to_consider, loss_fn, min_samples = 2, eta = 0.1, 
-                          reg_lambda = 0):
-    """Function that calculates the best SSE for any arbitrary twice-differentiable loss function."""
-    if len(X) < 2 * min_samples:
-        return (np.inf, None, None, None, None)
+    return actual_gain, curr_best_col, curr_best_splitting_val, left_val, right_val
     
-    alpha = num_cols_other_prediction #naming easier, we'll be using it a lot
-    best_gain = -np.inf
-    curr_best_col = None
-    curr_best_splitting_val = None
-    left_val = None
-    right_val = None
-    
-    for col in features_to_consider:
-        sort_idx = np.argsort(X[:, col])
-        X_col_sorted = X[:, col][sort_idx]
-        y_sorted = y[sort_idx]
-        other_predictions_sorted = other_predictions[sort_idx]
-        
-        #We only consider splits with more than min_samples on each side, after accounting for uniqueness
-        X_unique_sorted = np.unique(X_col_sorted)
-        
-        #We only want to consider the splits when y is at the end of an X value, not in the middle
-        #We also care about unique values, so we need to find the last unique index -- this does both
-        #Min samples 2, [1, 1, 1, 1, 2, 2, 3, 3] -> [3, 5]
-        placements = np.searchsorted(X_col_sorted, X_unique_sorted, side='right') - 1
-        placements_correct = [placement for placement in placements if placement >= (min_samples - 1) and placement < len(X_col_sorted) - min_samples]
-        
-        if len(placements_correct) == 0:
-                # No valid splits for this column given the min_samples restriction.
-                continue
-                
-        #Calculation of gradient/hessian for each split
-        global_gamma = loss_fn.argmin(y_sorted)
-        initial_predictions = (alpha * other_predictions_sorted + global_gamma) / (1 + alpha)
-        g_i = 1 / (alpha + 1) * loss_fn.gradient(y_sorted, initial_predictions)
-        h_i = 1 / (alpha + 1)**2 * loss_fn.hessian(y_sorted, initial_predictions)
-        
-        #Prefix/suffix sums for gradient/hessian
-        eps = 1e-6
-        g_prefix = np.cumsum(g_i)
-        h_prefix = np.cumsum(h_i) + eps 
-        g_suffix = g_prefix[-1] - g_prefix
-        h_suffix = h_prefix[-1] - h_prefix + eps
-        
-        #Calculating the approximate gain for each split
-        gain = 1 / 2 * (g_prefix**2 / (h_prefix + reg_lambda) + g_suffix**2 / (h_suffix + reg_lambda) - 
-                        (g_prefix + g_suffix)**2 / (h_prefix + h_suffix + reg_lambda))
-        
-        best_idx = placements_correct[np.argmax(gain[placements_correct])]
-        best_gain = gain[best_idx]
-        curr_best_col = col
-        curr_best_splitting_val = X_col_sorted[best_idx]
-        
-        #Find left and right values, then put them
-        left_gamma = loss_fn.argmin(y_sorted[:best_idx + 1])
-        right_gamma = loss_fn.argmin(y_sorted[best_idx + 1:])
-        
-        left_val = left_gamma - eta * g_prefix[best_idx] / (h_prefix[best_idx] + reg_lambda)
-        right_val = right_gamma - eta * g_suffix[best_idx] / (h_suffix[best_idx] + reg_lambda)
-        
-    return best_gain, curr_best_col, curr_best_splitting_val, left_val, right_val
 
 def get_best_sse(X, y, other_predictions, num_cols_other_prediction, features_to_consider, min_samples = 2, eta = 0.1):
     if len(X) < 2 * min_samples:
