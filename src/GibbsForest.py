@@ -7,7 +7,7 @@ from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
 class GibbsForest(RegressorMixin, BaseEstimator):
-    def __init__(self, loss_fn = LeastSquaresLoss, n_trees = 10, max_depth = 3, min_samples = 2, 
+    def __init__(self, loss_fn = LeastSquaresLoss(), n_trees = 10, max_depth = 3, min_samples = 2, 
                  feature_subsample = 1, row_subsample = 1, warmup_depth = 1, eta = 0.01, 
                  reg_lambda = 0, reg_gamma = 0, initial_weight = 'parent'):
         """

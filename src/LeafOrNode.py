@@ -1,5 +1,5 @@
 import numpy as np
-from .scan_thresholds import get_best_sse, get_best_gain_arbitrary
+from .scan_thresholds import get_best_sse, find_split
 from .Losses import *
 import random
 
@@ -46,7 +46,6 @@ class LeafOrNode:
         left_y = y[left_indices]
         right_y = y[right_indices]
                 
-                
         left_best_error_reduction, left_col_split = self.left.get_best_split(left_X, left_y, left_tree_level_predictions, left_other_predictions, num_cols_other_prediction, features_to_consider, 
                                                              new_tree = False)
         right_best_error_reduction, right_col_split = self.right.get_best_split(right_X, right_y, right_tree_level_predictions, right_other_predictions, num_cols_other_prediction, features_to_consider,
@@ -65,38 +64,21 @@ class LeafOrNode:
         """Function that gets the best split for a leaf, but doesn't split it yet."""
         if np.isnan(other_predictions).any():
             print("NAN in other_predictions")
-        if new_tree:
-            old_predictions = other_predictions
-        else:
-            old_predictions = (tree_level_predictions + other_predictions * num_cols_other_prediction) / (num_cols_other_prediction + 1)
-        
-        total_error = np.sum((y - old_predictions)**2) #Getting total error that we want to reduce
         
         best_sse, curr_best_col, curr_best_splitting_val, left_val, right_val = get_best_sse(X, y, other_predictions, num_cols_other_prediction, 
                                                                         features_to_consider = features_to_consider, min_samples=self.min_samples, 
                                                                         eta = self.eta)
         
-        test_best_gain, test_best_col, test_best_splitting_val, test_left_val, test_right_val = get_best_gain_arbitrary(
-            X, y, self.val, other_predictions, num_cols_other_prediction, features_to_consider = features_to_consider, min_samples=self.min_samples,
-            eta = self.eta, loss_fn=LeastSquaresLoss(), initial_weight='argmin')
-        
-        #Check if the two methods agree
-        if curr_best_col == test_best_col and curr_best_splitting_val == test_best_splitting_val:
-            print("Methods agree")
-        elif curr_best_col == test_best_col and curr_best_splitting_val != test_best_splitting_val:
-            print("Methods disagree, but only on splitting value")
-        else:
-            print("Methods disagree")
-            print(f"Original: {curr_best_col}, {curr_best_splitting_val}")
-            print(f"Arbitary: {test_best_col}, {test_best_splitting_val}")
-                
-        best_error_reduction = total_error - best_sse
-        self.curr_best_col = curr_best_col
-        self.curr_best_splitting_val = curr_best_splitting_val
+        gain, col, splitting_val, left_val, right_val = find_split(
+            X, y, other_predictions, self.val, num_cols_other_prediction, features_to_consider = features_to_consider, min_samples=self.min_samples,
+            eta = self.eta, loss_fn=LeastSquaresLoss(), initial_weight='parent')
+    
+        self.curr_best_col = col
+        self.curr_best_splitting_val = splitting_val
         self.left_val = left_val
         self.right_val = right_val
             
-        return best_error_reduction, curr_best_col
+        return gain, self.curr_best_col
         
     def split(self, X, y):
         """Function that ACTUALLY splits the node, given information we created when testing splits"""

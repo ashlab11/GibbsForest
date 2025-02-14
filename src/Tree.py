@@ -1,13 +1,11 @@
-import numpy as np
-from line_profiler import profile
-from .scan_thresholds import get_best_sse, get_best_sse_arbitary
 from .Losses import *
 from .LeafOrNode import LeafOrNode
 import random
         
 class Tree:
-    def __init__(self, X, y, num_features_considering = 1, min_samples = 2, max_depth = 3, eta = 0):
-        self.root = LeafOrNode(np.mean(y), max_depth = max_depth, min_samples = min_samples, eta = eta)
+    def __init__(self, X, y, num_features_considering = 1, min_samples = 2, max_depth = 3, eta = 0, 
+                 loss_fn = LeastSquaresLoss()):
+        self.root = LeafOrNode(loss_fn.argmin(y), max_depth = max_depth, min_samples = min_samples, eta = eta)
         self.min_samples = min_samples
         self.max_depth = max_depth
         self.num_splits = 0
