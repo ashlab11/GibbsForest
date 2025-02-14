@@ -10,8 +10,8 @@ class Tree:
         self.max_depth = max_depth
         self.num_splits = 0
         self.features_considered = random.sample(range(X.shape[1]), num_features_considering)
-    def get_best_split(self, X, y, tree_predictions, other_predictions, num_cols_other_prediction):
-        return self.root.get_best_split(X, y, tree_predictions, other_predictions, num_cols_other_prediction, self.features_considered) 
+    def get_best_split(self, X, y, other_predictions, num_cols_other_prediction):
+        return self.root.get_best_split(X, y, other_predictions, num_cols_other_prediction, self.features_considered) 
     def split(self, X, y):
         """Function that splits the tree"""
         self.root.split(X, y)

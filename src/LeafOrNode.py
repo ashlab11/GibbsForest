@@ -18,8 +18,7 @@ class LeafOrNode:
         self.next_to_split = None
      
          
-    def get_best_split(self, X, y, tree_level_predictions, other_predictions, num_cols_other_prediction, features_to_consider,
-                        new_tree = True):
+    def get_best_split(self, X, y, other_predictions, num_cols_other_prediction, features_to_consider):
         """Function that gets the best split for a node or leaf, but doesn't split it yet
         Note: new_tree is a boolean that tells us whether we are splitting a new tree or not, 
         which is necessary for error calculations. 
@@ -27,29 +26,25 @@ class LeafOrNode:
         if self.curr_depth == self.max_depth or len(y) <= self.min_samples:
             return (0, -1) #No error reduction possible
         if self.left == None and self.right == None:
-            return self.get_best_split_leaf(X, y, tree_level_predictions, other_predictions, num_cols_other_prediction, features_to_consider, new_tree)
+            return self.get_best_split_leaf(X, y, other_predictions, num_cols_other_prediction, features_to_consider)
         else:
-            return self.get_best_split_node(X, y, tree_level_predictions, other_predictions, num_cols_other_prediction, features_to_consider)
+            return self.get_best_split_node(X, y, other_predictions, num_cols_other_prediction, features_to_consider)
         
-    def get_best_split_node(self, X, y, tree_level_predictions, other_predictions, num_cols_other_prediction, features_to_consider):
+    def get_best_split_node(self, X, y, other_predictions, num_cols_other_prediction, features_to_consider):
         """Function that gets the best split for a node, but doesn't split it yet"""
         left_indices = X[:, self.curr_best_col] <= self.curr_best_splitting_val
         right_indices = ~left_indices
         
         left_X = X[left_indices]
         right_X = X[right_indices]
-        left_tree_level_predictions = tree_level_predictions[left_indices]
-        right_tree_level_predictions = tree_level_predictions[right_indices]
-        
+
         left_other_predictions = other_predictions[left_indices]
         right_other_predictions = other_predictions[right_indices]
         left_y = y[left_indices]
         right_y = y[right_indices]
                 
-        left_best_error_reduction, left_col_split = self.left.get_best_split(left_X, left_y, left_tree_level_predictions, left_other_predictions, num_cols_other_prediction, features_to_consider, 
-                                                             new_tree = False)
-        right_best_error_reduction, right_col_split = self.right.get_best_split(right_X, right_y, right_tree_level_predictions, right_other_predictions, num_cols_other_prediction, features_to_consider,
-                                                               new_tree = False)
+        left_best_error_reduction, left_col_split = self.left.get_best_split(left_X, left_y, left_other_predictions, num_cols_other_prediction, features_to_consider)
+        right_best_error_reduction, right_col_split = self.right.get_best_split(right_X, right_y, right_other_predictions, num_cols_other_prediction, features_to_consider)
         
         if left_best_error_reduction > right_best_error_reduction:
             self.curr_best_error_reduction = left_best_error_reduction
@@ -60,14 +55,10 @@ class LeafOrNode:
             self.next_to_split = self.right
             return right_best_error_reduction, right_col_split
 
-    def get_best_split_leaf(self, X, y, tree_level_predictions, other_predictions, num_cols_other_prediction, features_to_consider, new_tree):
+    def get_best_split_leaf(self, X, y, other_predictions, num_cols_other_prediction, features_to_consider):
         """Function that gets the best split for a leaf, but doesn't split it yet."""
         if np.isnan(other_predictions).any():
             print("NAN in other_predictions")
-        
-        best_sse, curr_best_col, curr_best_splitting_val, left_val, right_val = get_best_sse(X, y, other_predictions, num_cols_other_prediction, 
-                                                                        features_to_consider = features_to_consider, min_samples=self.min_samples, 
-                                                                        eta = self.eta)
         
         gain, col, splitting_val, left_val, right_val = find_split(
             X, y, other_predictions, self.val, num_cols_other_prediction, features_to_consider = features_to_consider, min_samples=self.min_samples,
