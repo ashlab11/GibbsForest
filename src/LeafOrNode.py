@@ -4,14 +4,20 @@ from .Losses import *
 import random
 
 class LeafOrNode:
-    def __init__(self, val, curr_depth = 0, max_depth = 3, min_samples = 2, eta = 0.1):
-        self.left = None
-        self.right = None
+    def __init__(self, val, curr_depth = 0, max_depth = 3, min_samples = 2, eta = 0.1, initial_weight = 'parent', 
+                 loss_fn = LeastSquaresLoss()):
+        #Values given from the tree
         self.max_depth = max_depth
         self.min_samples = min_samples
         self.curr_depth = curr_depth
         self.val = val
         self.eta = eta
+        self.initial_weight = initial_weight
+        self.loss_fn = loss_fn
+
+        #Values calculated by splits
+        self.left = None
+        self.right = None
         self.curr_best_col = None
         self.curr_best_splitting_val = None
         self.curr_best_error_reduction = None
@@ -62,7 +68,7 @@ class LeafOrNode:
         
         gain, col, splitting_val, left_val, right_val = find_split(
             X, y, other_predictions, self.val, num_cols_other_prediction, features_to_consider = features_to_consider, min_samples=self.min_samples,
-            eta = self.eta, loss_fn=LeastSquaresLoss(), initial_weight='parent')
+            eta = self.eta, loss_fn=self.loss_fn, initial_weight = self.initial_weight)
     
         self.curr_best_col = col
         self.curr_best_splitting_val = splitting_val
@@ -70,7 +76,29 @@ class LeafOrNode:
         self.right_val = right_val
             
         return gain, self.curr_best_col
-        
+    
+    def initial_split(self, X, y, warmup_depth, features_considered):
+        """Function that does the initial splits, up to a warmup depth
+        NOTE: Setting initial weight = parent and eta = 1 is equivalent to using argmin with 0 eta for initial splits.
+        I chose to use the former for theoretical simplicity, but the latter is equally efficient.
+        """
+        if self.curr_depth < warmup_depth:
+            #Testing parent 1 vs argmin 0
+            #On MSE, parent 1 and argmin 0 are the same
+            gain, col, splitting_val, left_val, right_val = find_split(X, y, np.zeros(len(y)), self.val, 0, features_to_consider = features_considered, min_samples=self.min_samples,
+                    eta = 1, loss_fn=self.loss_fn, initial_weight = "parent")
+                        
+            self.curr_best_col = col
+            self.curr_best_splitting_val = splitting_val
+            self.left_val = left_val
+            self.right_val = right_val
+            self.split(X, y)
+            
+            left_indices = X[:, self.curr_best_col] <= self.curr_best_splitting_val
+            right_indices = ~left_indices
+            self.left.initial_split(X[left_indices], y[left_indices], warmup_depth, features_considered)
+            self.right.initial_split(X[right_indices], y[right_indices], warmup_depth, features_considered) 
+    
     def split(self, X, y):
         """Function that ACTUALLY splits the node, given information we created when testing splits"""
         if self.curr_best_error_reduction == 0:
@@ -93,8 +121,8 @@ class LeafOrNode:
                     self.right.split(right_X, right_y)
                 
     def split_leaf(self, X, y):
-        self.left = LeafOrNode(self.left_val, curr_depth= self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, eta = self.eta)
-        self.right = LeafOrNode(self.right_val, curr_depth = self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, eta = self.eta)
+        self.left = LeafOrNode(self.left_val, curr_depth= self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, eta = self.eta, initial_weight = self.initial_weight)
+        self.right = LeafOrNode(self.right_val, curr_depth = self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, eta = self.eta, initial_weight = self.initial_weight)
         return None
      
     def predict(self, X_predict = None):
