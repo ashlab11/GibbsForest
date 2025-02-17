@@ -13,7 +13,9 @@ def check_params(
     eta, 
     reg_lambda, 
     reg_gamma, 
-    initial_weight
+    initial_weight, 
+    eta_decay, 
+    dropout
 ):
     """
     Checks parameters, raising ValueErrors along the way
@@ -68,6 +70,10 @@ def check_params(
     if eta > 1 or eta < 0:
         raise ValueError("eta must be between 0 and 1")
     
+    #--- eta_decay ---
+    if not isinstance(eta_decay, SupportsFloat):
+        raise TypeError("eta must be a float or convertible to one")
+    
     #--- reg terms ---
     if not (isinstance(reg_gamma, SupportsFloat) and isinstance(reg_lambda, SupportsFloat)):
         raise ValueError('Regularization terms must be floats or convertible to one')
@@ -78,4 +84,10 @@ def check_params(
     if initial_weight not in ['parent', 'argmin']:
         raise ValueError("initial weight must be one of ['parent', 'argmin']")
     
-    return loss_fn, n_trees, max_depth, min_samples, feature_subsample, row_subsample, warmup_depth, eta, reg_lambda, reg_gamma, initial_weight
+    #--- dropout ---
+    if not isinstance(dropout, SupportsFloat):
+        raise TypeError("dropout must be a float or convertible to one")
+    if dropout > 1 or dropout < 0:
+        raise ValueError("dropout must be between 0 and 1")
+    
+    return loss_fn, n_trees, max_depth, min_samples, feature_subsample, row_subsample, warmup_depth, eta, reg_lambda, reg_gamma, initial_weight, eta_decay, dropout
