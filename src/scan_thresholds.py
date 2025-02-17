@@ -14,7 +14,7 @@ def find_split(X, y, other_predictions, leaf_weight, num_cols_other_predictions,
     other_predictions : ndarray, shape (n_samples,)
     The predictions from the rest of the ensemble (i.e. alpha many).
     parent_leaf_weight : float
-        The parent's weight (w in your notes). 
+        The parent's weight 
     num_cols_other_preds : int
         The alpha (number of other trees in ensemble).
     loss_fn : object 

@@ -74,25 +74,23 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         bootstrapped_X = X.copy()
         bootstrapped_y = y.copy()
 
-        #Initial tree creation and warmup levels        
+        #---- INITIAL TREE CREATION, UP TO WARMUP DEPTH ----#     
         for i in range(self.n_trees):
             bootstrapped_idx = np.random.choice(len(X), self.num_rows_considering, replace = True)
             bootstrapped_X = X[bootstrapped_idx]
             bootstrapped_y = y[bootstrapped_idx]
-                        
-            """Creating all trees as stumps first"""
-            #Note: must use bagging/subsample to get better results here, should figure out how to do so?
+            
             tree = Tree(bootstrapped_X, bootstrapped_y, num_features_considering = self.num_features_considering, 
-                        max_depth=self.max_depth, min_samples = self.min_samples, eta = self.eta)
+                        max_depth=self.max_depth, min_samples = self.min_samples, eta = self.eta, initial_weight = self.initial_weight, 
+                        loss_fn=self.loss_fn)
             #Initial split -- no current tree-level predictions, and no predictions from any other splits
-            #TODO: implement warmup depth here
-            tree.get_best_split(bootstrapped_X, bootstrapped_y, np.zeros(self.num_rows_considering), 0)
-            tree.split(bootstrapped_X, bootstrapped_y)            
+            tree.initial_splits(bootstrapped_X, bootstrapped_y, self.warmup_depth)
             self._trees.append(tree)
             
             #TODO: implement feature importance here
             self._predictions[i] = tree.predict(X)
-              
+            
+        #---- GIBBS TREE CREATION ----#
         #Round-robin -- with max_depth = N and initial depth D, we should have 2^N - 2^D splits
         for _ in range(2**self.max_depth - 2**self.warmup_depth):
             #Randomly selecting the permutation of trees to update
