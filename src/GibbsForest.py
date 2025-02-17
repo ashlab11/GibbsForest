@@ -3,6 +3,7 @@ import random
 from .Tree import Tree
 from .Losses import *
 from .LeafOrNode import LeafOrNode
+from .ParamErrors import check_params
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
@@ -41,25 +42,9 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         X, y = check_X_y(X, y, accept_sparse=False)
         self.n_features_in_ = X.shape[1]  # for sklearn compliance
         
-        if self.n_trees is None or self.n_trees < 2:
-            raise ValueError('n_trees must be an integer greater than 1')
-        
-        #Setting the max depth
-        if self.max_depth is None:
-            self.max_depth = np.inf
-        elif isinstance(self.max_depth, int):
-            self.max_depth = self.max_depth    
-        else:
-            raise ValueError('max_depth must be an integer or None')
-        
-        #Setting the min_samples
-        if self.min_samples is None:
-            self.min_samples = np.inf
-        elif isinstance(self.min_samples, int):
-            self.min_samples = self.min_samples
-        else:
-            raise ValueError('min samples must be an integer or none')
-        
+        #Checking parameters
+        self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample, self.row_subsample, self.warmup_depth, self.eta, self.reg_lambda, self.reg_gamma, self.initial_weight = check_params(
+            self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample, self.row_subsample, self.warmup_depth, self.eta, self.reg_gamma, self.reg_lambda, self.initial_weight)
         
         self.feature_importances_ = np.zeros(self.n_features_in_)
         self.feature_splits = np.zeros(self.n_features_in_)
@@ -113,10 +98,10 @@ class GibbsForest(RegressorMixin, BaseEstimator):
                 mean_predictions_without_tree = np.mean(predictions_without_tree, axis = 0)
                 
                 error_reduction, best_split = tree.get_best_split(X_batch, y_batch, mean_predictions_without_tree, self.n_trees - 1)
-                if error_reduction > self.reg_gamma:
+                if error_reduction > self.reg_gamma: #Only split if gain is above gamma
                     tree.split(X_batch, y_batch)
                     
-                    #Predicts are based on the entire X, not X_batch, and new_predictions must be updated similarly
+                    #Predictions are based on the entire X, not X_batch, and new_predictions must be updated similarly
                     self._predictions[tree_idx] = tree.predict(X)
                     batch_predictions[tree_idx] = self._predictions[tree_idx][row_idx]
                     

@@ -126,6 +126,10 @@ def find_split(X, y, other_predictions, leaf_weight, num_cols_other_predictions,
             right_val = right_init + eta * right_delta
             
     #Calculate actual gain, then return
+    if curr_best_col is None:
+        return (-np.inf, None, None, None, None)
+    
+    #Calculate actual gain, then return
     error_before = loss_fn(y, (alpha * other_predictions + init) / (1 + alpha))
     left_error = loss_fn(y[X[:, curr_best_col] <= curr_best_splitting_val], (alpha * other_predictions[X[:, curr_best_col] <= curr_best_splitting_val] + left_val) / (1 + alpha))
     right_error = loss_fn(y[X[:, curr_best_col] > curr_best_splitting_val], (alpha * other_predictions[X[:, curr_best_col] > curr_best_splitting_val] + right_val) / (1 + alpha))
