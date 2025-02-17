@@ -10,7 +10,8 @@ from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 class GibbsForest(RegressorMixin, BaseEstimator):
     def __init__(self, loss_fn = LeastSquaresLoss(), n_trees = 10, max_depth = 3, min_samples = 2, 
                  feature_subsample = 1, row_subsample = 1, warmup_depth = 1, eta = 0.01, 
-                 reg_lambda = 0, reg_gamma = 0, initial_weight = 'parent'):
+                 reg_lambda = 0, reg_gamma = 0, initial_weight = 'parent', 
+                 eta_decay = 1, dropout = 0):
         """
         Parameters:
         loss_fn: loss function to use for the trees (default is LeastSquaresLoss)
@@ -24,6 +25,9 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         reg_lambda: L2 regularization parameter (default is 0)
         TODO: reg_alpha: L1 regularization parameter (default is 0)
         reg_gamma: min loss reduction to make a split (default is 0)
+        initial_weight: initial weight of the tree (default is 'parent')
+        eta_decay: learning rate decay (default is 1)
+        dropout: probability of skipping a tree update (default is 0)
         """
         
         self.loss_fn = loss_fn
@@ -37,14 +41,16 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         self.reg_lambda = reg_lambda
         self.reg_gamma = reg_gamma
         self.initial_weight = initial_weight
+        self.eta_decay = eta_decay
+        self.dropout = dropout
     
     def fit(self, X, y):
         X, y = check_X_y(X, y, accept_sparse=False)
         self.n_features_in_ = X.shape[1]  # for sklearn compliance
         
         #Checking parameters
-        self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample, self.row_subsample, self.warmup_depth, self.eta, self.reg_lambda, self.reg_gamma, self.initial_weight = check_params(
-            self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample, self.row_subsample, self.warmup_depth, self.eta, self.reg_gamma, self.reg_lambda, self.initial_weight)
+        self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample, self.row_subsample, self.warmup_depth, self.eta, self.reg_lambda, self.reg_gamma, self.initial_weight, self.eta_decay, self.dropout = check_params(
+            self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample, self.row_subsample, self.warmup_depth, self.eta, self.reg_gamma, self.reg_lambda, self.initial_weight, self.eta_decay, self.dropout)
         
         self.feature_importances_ = np.zeros(self.n_features_in_)
         self.feature_splits = np.zeros(self.n_features_in_)
@@ -66,7 +72,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
             bootstrapped_y = y[bootstrapped_idx]
             
             tree = Tree(bootstrapped_X, bootstrapped_y, num_features_considering = self.num_features_considering, 
-                        max_depth=self.max_depth, min_samples = self.min_samples, eta = self.eta, initial_weight = self.initial_weight, 
+                        max_depth=self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight, 
                         loss_fn=self.loss_fn)
             #Initial split -- no current tree-level predictions, and no predictions from any other splits
             tree.initial_splits(bootstrapped_X, bootstrapped_y, self.warmup_depth)
@@ -93,11 +99,16 @@ class GibbsForest(RegressorMixin, BaseEstimator):
             batch_predictions = [predictions[row_idx] for predictions in self._predictions]
             
             for tree_idx in tree_permutation:
+                # ---- Dropout condition: skip updating this tree with probability self.dropout ----
+                if random.random() < self.dropout:
+                    continue  # skip update, move to the next tree
+
                 tree = self._trees[tree_idx]
                 predictions_without_tree = np.delete(batch_predictions, tree_idx, 0)
                 mean_predictions_without_tree = np.mean(predictions_without_tree, axis = 0)
                 
-                error_reduction, best_split = tree.get_best_split(X_batch, y_batch, mean_predictions_without_tree, self.n_trees - 1)
+                error_reduction, best_split = tree.get_best_split(X_batch, y_batch, mean_predictions_without_tree, self.n_trees - 1, 
+                                                                  self.eta)
                 if error_reduction > self.reg_gamma: #Only split if gain is above gamma
                     tree.split(X_batch, y_batch)
                     
@@ -108,7 +119,8 @@ class GibbsForest(RegressorMixin, BaseEstimator):
                     #Updating feature importances and splits
                     self.feature_importances_[best_split] += error_reduction
                     self.feature_splits[best_split] += 1
-        
+            
+            self.eta *= self.eta_decay
         return self 
         
 
