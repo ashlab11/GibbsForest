@@ -88,6 +88,10 @@ class LeafOrNode:
             gain, col, splitting_val, left_val, right_val = find_split(X, y, np.zeros(len(y)), self.val, 0, features_to_consider = features_considered, min_samples=self.min_samples,
                     eta = 1, loss_fn=self.loss_fn, initial_weight = "parent")
                         
+            if splitting_val is None:
+                #When no further splits can be made, stop initial splits
+                return
+            
             self.curr_best_col = col
             self.curr_best_splitting_val = splitting_val
             self.left_val = left_val
