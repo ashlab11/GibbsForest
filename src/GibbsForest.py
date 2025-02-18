@@ -52,6 +52,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample, self.row_subsample, self.warmup_depth, self.eta, self.reg_lambda, self.reg_gamma, self.initial_weight, self.eta_decay, self.dropout = check_params(
             self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample, self.row_subsample, self.warmup_depth, self.eta, self.reg_gamma, self.reg_lambda, self.initial_weight, self.eta_decay, self.dropout)
         
+        self.weights = np.ones(self.n_trees) * 1 / self.n_trees #Initial weights
         self.feature_importances_ = np.zeros(self.n_features_in_)
         self.feature_splits = np.zeros(self.n_features_in_)
         self.num_features_considering = max(int(self.n_features_in_ * self.feature_subsample), 1)
@@ -97,17 +98,18 @@ class GibbsForest(RegressorMixin, BaseEstimator):
 
             #Getting predictions for the current batch of rows
             batch_predictions = [predictions[row_idx] for predictions in self._predictions]
-            
             for tree_idx in tree_permutation:
                 # ---- Dropout condition: skip updating this tree with probability self.dropout ----
                 if random.random() < self.dropout:
                     continue  # skip update, move to the next tree
 
                 tree = self._trees[tree_idx]
-                predictions_without_tree = np.delete(batch_predictions, tree_idx, 0)
-                mean_predictions_without_tree = np.mean(predictions_without_tree, axis = 0)
+                individual_predictions_without_tree = np.delete(batch_predictions, tree_idx, 0)
+                weights_without_tree = np.delete(self.weights, tree_idx)
+                predictions_without_tree = weights_without_tree @ individual_predictions_without_tree
                 
-                error_reduction, best_split = tree.get_best_split(X_batch, y_batch, mean_predictions_without_tree, self.n_trees - 1, 
+                #Get best split with these weights
+                error_reduction, best_split = tree.get_best_split(X_batch, y_batch, predictions_without_tree, self.weights[tree_idx], 
                                                                   self.eta)
                 if error_reduction > self.reg_gamma: #Only split if gain is above gamma
                     tree.split(X_batch, y_batch)

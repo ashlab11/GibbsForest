@@ -17,8 +17,8 @@ class Tree:
         """Function that does the initial splits, up to a warmup depth"""    
         num_splits = self.root.initial_split(X, y, warmup_depth, self.features_considered)
         self.num_splits += num_splits
-    def get_best_split(self, X, y, other_predictions, num_cols_other_prediction, eta):
-        return self.root.get_best_split(X, y, other_predictions, num_cols_other_prediction, self.features_considered, eta) 
+    def get_best_split(self, X, y, other_predictions, tree_weight, eta):
+        return self.root.get_best_split(X, y, other_predictions, tree_weight, self.features_considered, eta) 
     def split(self, X, y):
         """Function that splits the tree"""
         self.root.split(X, y)
