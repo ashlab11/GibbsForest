@@ -11,7 +11,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
     def __init__(self, loss_fn = LeastSquaresLoss(), n_trees = 10, max_depth = 3, min_samples = 2, 
                  feature_subsample = 1, row_subsample = 1, warmup_depth = 1, eta = 0.01, 
                  reg_lambda = 0, reg_gamma = 0, initial_weight = 'parent', 
-                 eta_decay = 1, dropout = 0):
+                 eta_decay = 1, dropout = 0, ccp_alpha = None):
         """
         Parameters:
         loss_fn: loss function to use for the trees (default is LeastSquaresLoss)
@@ -43,19 +43,21 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         self.initial_weight = initial_weight
         self.eta_decay = eta_decay
         self.dropout = dropout
+        self.ccp_alpha = ccp_alpha
     
     def fit(self, X, y):
         X, y = check_X_y(X, y, accept_sparse=False)
         self.n_features_in_ = X.shape[1]  # for sklearn compliance
         
         #Checking parameters
-        self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample, self.row_subsample, self.warmup_depth, self.eta, self.reg_lambda, self.reg_gamma, self.initial_weight, self.eta_decay, self.dropout = check_params(
-            self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample, self.row_subsample, self.warmup_depth, self.eta, self.reg_gamma, self.reg_lambda, self.initial_weight, self.eta_decay, self.dropout)
+        self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample, self.row_subsample, self.warmup_depth, self.eta, self.reg_lambda, self.reg_gamma, self.initial_weight, self.eta_decay, self.dropout, self.ccp_alpha = check_params(
+            self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample, self.row_subsample, self.warmup_depth, self.eta, self.reg_lambda, self.reg_gamma, self.initial_weight, self.eta_decay, self.dropout, self.ccp_alpha)
         
         self.feature_importances_ = np.zeros(self.n_features_in_)
         self.feature_splits = np.zeros(self.n_features_in_)
         self.num_features_considering = max(int(self.n_features_in_ * self.feature_subsample), 1)
         self.num_rows_considering = max(int(self.row_subsample * len(y)), 1)
+        self.reversions = 0
         
         self._trees = []
         self._predictions = np.empty((self.n_trees, len(y)))
@@ -73,7 +75,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
             
             tree = Tree(bootstrapped_X, bootstrapped_y, num_features_considering = self.num_features_considering, 
                         max_depth=self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight, 
-                        loss_fn=self.loss_fn)
+                        loss_fn=self.loss_fn, reg_lambda = self.reg_lambda)
             #Initial split -- no current tree-level predictions, and no predictions from any other splits
             tree.initial_splits(bootstrapped_X, bootstrapped_y, self.warmup_depth)
             self._trees.append(tree)
@@ -83,7 +85,8 @@ class GibbsForest(RegressorMixin, BaseEstimator):
             
         #---- GIBBS TREE CREATION ----#
         #Round-robin -- with max_depth = N and initial depth D, we should have 2^N - 2^D splits
-        for _ in range(2**self.max_depth - 2**self.warmup_depth):
+        while sum([tree.num_splits for tree in self._trees]) < len(self._trees) * 2**(self.max_depth - 0.5):
+        #for _ in range(2**self.max_depth - 2**self.warmup_depth):
             #Randomly selecting the permutation of trees to update
             tree_permutation = np.random.permutation(self.n_trees)
             
@@ -121,6 +124,21 @@ class GibbsForest(RegressorMixin, BaseEstimator):
                     self.feature_splits[best_split] += 1
             
             self.eta *= self.eta_decay
+            
+             # On-the-fly reversion pass (optional)
+            if self.ccp_alpha is not None:
+                # We'll do a pass over all trees, re-checking splits
+                for t_idx, tree in enumerate(self._trees):
+                    predictions_without_this = np.delete(self._predictions, t_idx, axis=0)
+                    mean_preds_others = np.mean(predictions_without_this, axis=0)
+                    # We revert-check using the entire dataset or just the batch
+                    # Doing entire dataset is more accurate
+                    reverts = tree.revert_checks(X, y, mean_preds_others, alpha=self.n_trees-1, ccp_alpha = self.ccp_alpha)
+                    if reverts > 0:
+                        # If we reverted, we need to update the predictions
+                        self._predictions[t_idx] = tree.predict(X)
+                        self.reversions += reverts
+        
         return self 
         
 
@@ -129,6 +147,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         check_is_fitted(self, 'n_features_in_')  # raises NotFittedError if missing
         print(f"This forest has a total of {sum([tree.num_splits for tree in self._trees])} splits")
         print(f"This forest has a total of {len(self._trees)} trees")
+        print(f"This forest has reverted {self.reversions} splits")
         
         """We want to go through each tree and combine predictions"""
         predictions = []

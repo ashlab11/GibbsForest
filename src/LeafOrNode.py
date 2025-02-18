@@ -5,7 +5,7 @@ import random
 
 class LeafOrNode:
     def __init__(self, val, curr_depth = 0, max_depth = 3, min_samples = 2, initial_weight = 'parent', 
-                 loss_fn = LeastSquaresLoss()):
+                 loss_fn = LeastSquaresLoss(), reg_lambda = 0):
         #Values given from the tree
         self.max_depth = max_depth
         self.min_samples = min_samples
@@ -13,14 +13,15 @@ class LeafOrNode:
         self.val = val
         self.initial_weight = initial_weight
         self.loss_fn = loss_fn
+        self.reg_lambda = reg_lambda
 
         #Values calculated by splits
         self.left = None
         self.right = None
         self.curr_best_col = None
         self.curr_best_splitting_val = None
-        self.curr_best_error_reduction = None
         self.next_to_split = None
+        self.initial_gain = -np.inf
      
          
     def get_best_split(self, X, y, other_predictions, num_cols_other_prediction, features_to_consider, eta):
@@ -52,11 +53,11 @@ class LeafOrNode:
         right_best_error_reduction, right_col_split = self.right.get_best_split(right_X, right_y, right_other_predictions, num_cols_other_prediction, features_to_consider, eta)
         
         if left_best_error_reduction > right_best_error_reduction:
-            self.curr_best_error_reduction = left_best_error_reduction
+            #self.curr_best_error_reduction = left_best_error_reduction
             self.next_to_split = self.left
             return left_best_error_reduction, left_col_split
         else:
-            self.curr_best_error_reduction = right_best_error_reduction
+            #self.curr_best_error_reduction = right_best_error_reduction
             self.next_to_split = self.right
             return right_best_error_reduction, right_col_split
 
@@ -67,8 +68,9 @@ class LeafOrNode:
         
         gain, col, splitting_val, left_val, right_val = find_split(
             X, y, other_predictions, self.val, num_cols_other_prediction, features_to_consider = features_to_consider, min_samples=self.min_samples,
-            eta = eta, loss_fn=self.loss_fn, initial_weight = self.initial_weight)
+            eta = eta, loss_fn=self.loss_fn, initial_weight = self.initial_weight, reg_lambda=self.reg_lambda)
     
+        self.initial_gain = gain
         self.curr_best_col = col
         self.curr_best_splitting_val = splitting_val
         self.left_val = left_val
@@ -82,16 +84,19 @@ class LeafOrNode:
         I chose to use the former for theoretical simplicity, but the latter is equally efficient.
         """
         splits = 0
+        left_splits = 0
+        right_splits = 0
         if self.curr_depth < warmup_depth:
             #Testing parent 1 vs argmin 0
             #On MSE, parent 1 and argmin 0 are the same
             gain, col, splitting_val, left_val, right_val = find_split(X, y, np.zeros(len(y)), self.val, 0, features_to_consider = features_considered, min_samples=self.min_samples,
-                    eta = 1, loss_fn=self.loss_fn, initial_weight = "parent")
+                    eta = 1, loss_fn=self.loss_fn, initial_weight = "parent", reg_lambda=self.reg_lambda)
                         
             if splitting_val is None:
                 #When no further splits can be made, stop initial splits
                 return
             
+            self.initial_gain = gain
             self.curr_best_col = col
             self.curr_best_splitting_val = splitting_val
             self.left_val = left_val
@@ -108,7 +113,7 @@ class LeafOrNode:
     
     def split(self, X, y):
         """Function that ACTUALLY splits the node, given information we created when testing splits"""
-        if self.curr_best_error_reduction == 0:
+        if self.initial_gain < 0:
             #Should never happen, since we just don't split in the first place
             raise ValueError("Error: No error reduction possible")
         else:
@@ -128,8 +133,10 @@ class LeafOrNode:
                     self.right.split(right_X, right_y)
                 
     def split_leaf(self):
-        self.left = LeafOrNode(self.left_val, curr_depth= self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight)
-        self.right = LeafOrNode(self.right_val, curr_depth = self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight)
+        self.left = LeafOrNode(self.left_val, curr_depth= self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight, 
+                               loss_fn = self.loss_fn, reg_lambda = self.reg_lambda)
+        self.right = LeafOrNode(self.right_val, curr_depth = self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight, 
+                                loss_fn = self.loss_fn, reg_lambda = self.reg_lambda)
         return None
      
     def predict(self, X_predict = None):
@@ -152,6 +159,49 @@ class LeafOrNode:
     
             return predictions
         
+    def is_leaf(self):
+        return self.left is None and self.right is None
+    
+    def revert(self, X, y, other_predictions, alpha, ccp_alpha = 1e-6):
+        """If the node is a final node, compute the region error with children vs. as a single leaf.
+        If reverting yields nearly the same or better error, revert the split.
+        """
+        if self.is_leaf():
+            return 0 # If this is already a leaf, do nothing
+        
+        left_idx = X[:, self.curr_best_col] <= self.curr_best_splitting_val
+        right_idx = ~left_idx
+        if self.left.is_leaf() and self.right.is_leaf(): #Only revert if this is the final node
+            # Calculate error after split (summing left & right)
+            left_preds = (alpha * other_predictions[left_idx] + self.left.val) / (alpha + 1)
+            right_preds = (alpha * other_predictions[right_idx] + self.right.val) / (alpha + 1)
+
+            left_error = self.loss_fn(y[left_idx], left_preds)
+            right_error = self.loss_fn(y[right_idx], right_preds)
+            error_as_split = left_error + right_error
+            
+            # Calculate error as a single leaf
+            single_preds = (alpha * other_predictions + self.val) / (alpha + 1)
+            single_error = self.loss_fn(y, single_preds)
+            
+            # If reverting yields nearly the same or better error, revert the split
+            if (single_error - error_as_split) / error_as_split < ccp_alpha:
+                #print(f"Single over split gain: {single_error - error_as_split}, Initial gain: {self.initial_gain}")
+                self.left = None
+                self.right = None 
+                self.next_to_split = None
+                self.curr_best_col = None
+                self.curr_best_splitting_val = None
+                self.initial_gain = -np.inf
+                return 1
+            
+            return 0
+        
+        else: #If this ISN'T the final node, don't revert!
+            left_reverted = self.left.revert(X[left_idx], y[left_idx], other_predictions=other_predictions[left_idx], alpha=alpha, ccp_alpha = ccp_alpha)
+            right_reverted = self.right.revert(X[right_idx], y[right_idx], other_predictions=other_predictions[right_idx], alpha=alpha, ccp_alpha = ccp_alpha)
+            return left_reverted + right_reverted 
+            
     def __repr__(self):
         if self.left == None and self.right == None:
             return f"Leaf with value {self.val}"

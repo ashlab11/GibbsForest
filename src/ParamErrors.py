@@ -15,7 +15,8 @@ def check_params(
     reg_gamma, 
     initial_weight, 
     eta_decay, 
-    dropout
+    dropout, 
+    ccp_alpha
 ):
     """
     Checks parameters, raising ValueErrors along the way
@@ -90,4 +91,8 @@ def check_params(
     if dropout > 1 or dropout < 0:
         raise ValueError("dropout must be between 0 and 1")
     
-    return loss_fn, n_trees, max_depth, min_samples, feature_subsample, row_subsample, warmup_depth, eta, reg_lambda, reg_gamma, initial_weight, eta_decay, dropout
+    #--- ccp_alpha ---
+    if not isinstance(ccp_alpha, SupportsFloat) and ccp_alpha is not None:
+        raise TypeError("ccp_alpha must be a float or None")
+    
+    return loss_fn, n_trees, max_depth, min_samples, feature_subsample, row_subsample, warmup_depth, eta, reg_lambda, reg_gamma, initial_weight, eta_decay, dropout, ccp_alpha
