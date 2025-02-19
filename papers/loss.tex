@@ -13,34 +13,32 @@
 
 \section*{Algorithm}
 We let $w$ be the weight of a given parent leaf, and $w_L$, $w_R$ be the weights of the left and right children of the parent leaf. 
-For ease, denote $\Delta_L = w - w_L$ and $\Delta_R = w - w_R$. Our prediction $\hat{y}^{(t - 1)} = \frac{\alpha o_i + w}{\alpha + 1}$. 
+For ease, denote $\Delta_L = w - w_L$ and $\Delta_R = w - w_R$. Our prediction $\hat{y}^{(t - 1)} = o_i + \eta w$. 
 We increment our left leaf by some value $\Delta_L$ to get leaf value $w_L$. Our updated prediction is thus
-$\hat{y}^{(t)} = \frac{\alpha o_i + w}{\alpha + 1} + \frac{\Delta_L}{\alpha + 1}$. We will actually set $\hat{y}^{(t)} = \frac{\alpha o_i + w}{\alpha + 1} + \frac{\eta \Delta_L}{\alpha + 1}$, 
+$\hat{y}^{(t)} = o_i + \eta w + \eta \Delta_L$. We will actually set $\hat{y}^{(t)} = o_i + \eta w + \epsilon \eta \Delta_L$, 
 but that is not needed for this calculation.
 
 By Taylor Expansion, we have that \begin{align*}
     l(y_i, \hat{y_i}^{(t)}) &= \\
-    l(y_i, \hat{y_i}^{(t - 1)} + \frac{\Delta_L}{\alpha + 1}) &= \\
-    l(y_i, \hat{y_i}^{(t - 1)}) + \frac{\Delta_L}{\alpha + 1} \frac{\partial l(y_i, \hat{y_i}^{(t - 1)})}{\partial \hat{y_i}^{(t - 1)}} + \frac{\Delta_L^2}{2 (\alpha + 1)^2} \frac{\partial^2 l(y_i, \hat{y_i}^{(t - 1)})}{\partial (\hat{y_i}^{(t - 1)})^2}&= \\
-    l(y_i, \hat{y_i}^{(t - 1)}) + \frac{\Delta_L}{\alpha + 1} g_i + \frac{\Delta_L^2}{2 (\alpha + 1)^2} h_i
+    l(y_i, \hat{y_i}^{(t - 1)} + \eta \Delta_L) &= \\
+    l(y_i, \hat{y_i}^{(t - 1)}) + \eta \Delta_L \frac{\partial l(y_i, \hat{y_i}^{(t - 1)})}{\partial \hat{y_i}^{(t - 1)}} + \frac{\eta^2 \Delta_L^2}{2} \frac{\partial^2 l(y_i, \hat{y_i}^{(t - 1)})}{\partial (\hat{y_i}^{(t - 1)})^2}&= \\
+    l(y_i, \hat{y_i}^{(t - 1)}) + \eta \Delta_L g_i + \frac{\eta^2 \Delta_L^2}{2} h_i
 \end{align*}
 
 We also add a regularization term of $\frac{1}{2}\lambda(w + \Delta_L)^2 = \frac{1}{2} \lambda (w^2 + 2w\Delta_L + \Delta_L^2)$
 Combining terms and removing constants with respect to $\Delta_L$, we wish to minimize \[
- \frac{\Delta_L}{\alpha + 1} g_i + \frac{\Delta_L^2}{2(\alpha + 1)^2} h_i + \frac{1}{2} \lambda (2w\Delta_L + \Delta_L^2)
+ \eta \Delta_L g_i + \frac{\eta^2 \Delta_L^2}{2} h_i + \frac{1}{2} \lambda (2w\Delta_L + \Delta_L^2)
 \]
 
 Taking the derivative with respect to $\Delta_L$ and adding in all values on the left side, we have that \begin{align*}
-    \frac{G_L}{\alpha + 1} + \frac{\Delta_L}{(\alpha + 1)^2} H_L + \lambda w + \lambda \Delta_L = 0 &\implies \\
-    \Delta_L \left(\frac{H_L}{(\alpha + 1)^2} + \lambda \right) = -\frac{G_L}{\alpha + 1} - \lambda w &\implies \\
-    \Delta_L = - \frac{G_L}{\alpha + 1} * \frac{(\alpha + 1)^2}{H_L + \lambda(\alpha + 1)^2} - \lambda w *  \frac{(\alpha + 1)^2}{H_L + \lambda(\alpha + 1)^2} &\implies \\ 
-    \Delta_L = - (\alpha + 1) \frac{G_L}{H_L + \lambda (\alpha + 1)^2} - \lambda w *  \frac{(\alpha + 1)^2}{H_L + \lambda(\alpha + 1)^2} &\implies \\
-    \Delta_L = - (\alpha + 1) \frac{G_L + \lambda w (\alpha + 1)}{H_L + \lambda (\alpha + 1)^2}
+    \eta G_L + \eta^2 \Delta_L H_L + \lambda w + \lambda \Delta_L = 0 &\implies \\
+    \Delta_L \left(\eta^2 H_L + \lambda \right) = -\eta G_L - \lambda w &\implies \\
+    \Delta_L = -\frac{\eta G_L + \lambda w}{\eta^2 H_L + \lambda}
 \end{align*}
 
 We know that for a quadratic function in the form of $\frac{1}{2}bx^2 + ax$, the minimum value is $- \frac{a^2}{2b}$. 
-We have that $b = \frac{H_L}{(\alpha + 1)^2} + \lambda$, and $a = \frac{G_L}{\alpha + 1} + w\lambda$. So, the gain at the leaf is \[
-\frac{1}{2} \frac{(G_L + (\alpha + 1)w\lambda)^2}{H_L + \lambda(\alpha + 1)^2}
+We have that $b = \eta^2 H_L + \lambda$, and $a = \eta G_L + w\lambda$. So, the gain at the leaf is \[
+\frac{1}{2} \frac{(\eta G_L + w\lambda)^2}{\eta^2 H_L + \lambda}
 \]
 
 The determination, then, is whether to begin with w or the mean of y as the initial value.

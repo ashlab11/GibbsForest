@@ -2,7 +2,7 @@ import numpy as np
 from line_profiler import profile
 import warnings
 
-def find_split(X, y, other_predictions, leaf_weight, num_cols_other_predictions, features_to_consider, loss_fn, 
+def find_split(X, y, other_predictions, leaf_weight, tree_weight, features_to_consider, loss_fn, 
                              min_samples = 2, eta = 0.1, reg_lambda = 0, initial_weight = 'parent', eps = 1e-6):
     """A generic second-order-split approach a la GBM, 
     for any twice-differentiable 'loss_fn'.
@@ -43,7 +43,6 @@ def find_split(X, y, other_predictions, leaf_weight, num_cols_other_predictions,
     if len(X) < 2 * min_samples:
         return (-np.inf, None, None, None, None)
     
-    alpha = num_cols_other_predictions #naming easier, we'll be using it a lot
     best_gain = -np.inf
     curr_best_col = None
     curr_best_splitting_val = None
@@ -59,14 +58,15 @@ def find_split(X, y, other_predictions, leaf_weight, num_cols_other_predictions,
         raise ValueError('Initial weight must be parent or argmin')
         
     #Predictions before splitting
-    previous_predictions = (alpha * other_predictions + init) / (1 + alpha)
+    previous_predictions = other_predictions + init * tree_weight
     g_i = loss_fn.gradient(y, previous_predictions)
     h_i = loss_fn.hessian(y, previous_predictions)
      
     G = np.sum(g_i)
     H = np.sum(h_i) + eps
-    
-    prev_score = 1 / 2 * (G + (alpha + 1) * init * reg_lambda) ** 2 / (H + reg_lambda * (alpha + 1)**2)
+    if (H * tree_weight**2 + reg_lambda) == 0:
+        print(f"Division by 0. Tree weight is {tree_weight}, reg_lambda is {reg_lambda}")
+    prev_score = 1 / 2 * (tree_weight * G + init * reg_lambda) ** 2 / (H * tree_weight**2 + reg_lambda)
     for col in features_to_consider:
         sort_idx = np.argsort(X[:, col])
         X_col_sorted = X[:, col][sort_idx]
@@ -98,8 +98,8 @@ def find_split(X, y, other_predictions, leaf_weight, num_cols_other_predictions,
             """For optimization purposes, we apply the valid mask afterwards, but this means we have some division by 0.
             We use warnings to catch these."""
             warnings.simplefilter("ignore", category=RuntimeWarning)
-            left_score = 1 / 2 * (G_L + (alpha + 1) * init * reg_lambda) ** 2 / (H_L + (alpha + 1)**2 * reg_lambda)
-            right_score = 1 / 2 * (G_R + (alpha + 1) * init * reg_lambda) ** 2 / (H_R + (alpha + 1)**2 * reg_lambda)
+            left_score = 1 / 2 * (tree_weight * G_L + init * reg_lambda) ** 2 / (H_L * tree_weight**2 + reg_lambda)
+            right_score = 1 / 2 * (tree_weight * G_R + init * reg_lambda) ** 2 / (H_R * tree_weight**2 + reg_lambda)
         
         #Gain is NEGATIVE loss
         gain = left_score + right_score - prev_score
@@ -109,8 +109,8 @@ def find_split(X, y, other_predictions, leaf_weight, num_cols_other_predictions,
             best_gain = gain[best_idx]
             curr_best_col = col
             curr_best_splitting_val = X_col_sorted[best_idx]
-            left_delta = - (alpha + 1) * (G_L[best_idx] + init * reg_lambda * (alpha + 1)) / (H_L[best_idx] + reg_lambda * (alpha + 1)**2)
-            right_delta = - (alpha + 1) * (G_R[best_idx] + init * reg_lambda * (alpha + 1)) / (H_R[best_idx] + reg_lambda * (alpha + 1)**2)
+            left_delta = - (tree_weight * G_L[best_idx] + init * reg_lambda) / (tree_weight**2 * H_L[best_idx] + reg_lambda)
+            right_delta = - (tree_weight * G_R[best_idx] + init * reg_lambda) / (tree_weight**2 * H_R[best_idx] + reg_lambda)
             
             """If we're using argmin, we optimize starting with the argmin of the left and right sides. 
             Otherwise we use the parent weight for the init vals"""
@@ -130,9 +130,9 @@ def find_split(X, y, other_predictions, leaf_weight, num_cols_other_predictions,
         return (-np.inf, None, None, None, None)
     
     #Calculate actual gain, then return
-    error_before = loss_fn(y, (alpha * other_predictions + init) / (1 + alpha))
-    left_error = loss_fn(y[X[:, curr_best_col] <= curr_best_splitting_val], (alpha * other_predictions[X[:, curr_best_col] <= curr_best_splitting_val] + left_val) / (1 + alpha))
-    right_error = loss_fn(y[X[:, curr_best_col] > curr_best_splitting_val], (alpha * other_predictions[X[:, curr_best_col] > curr_best_splitting_val] + right_val) / (1 + alpha))
+    error_before = loss_fn(y, previous_predictions)
+    left_error = loss_fn(y[X[:, curr_best_col] <= curr_best_splitting_val], (other_predictions[X[:, curr_best_col] <= curr_best_splitting_val] + left_val * tree_weight))
+    right_error = loss_fn(y[X[:, curr_best_col] > curr_best_splitting_val], (other_predictions[X[:, curr_best_col] > curr_best_splitting_val] + right_val * tree_weight))
     error_after = left_error + right_error
     actual_gain = error_before - error_after
     

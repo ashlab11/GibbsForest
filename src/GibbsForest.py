@@ -9,7 +9,7 @@ from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
 class GibbsForest(RegressorMixin, BaseEstimator):
     def __init__(self, loss_fn = LeastSquaresLoss(), n_trees = 10, max_depth = 3, min_samples = 2, 
-                 feature_subsample = 1, row_subsample = 1, warmup_depth = 1, eta = 0.01, 
+                 feature_subsample = 1, row_subsample = 1, warmup_depth = 1, eta = 0.01, tree_eta = 0.05,
                  reg_lambda = 0, reg_gamma = 0, initial_weight = 'parent', 
                  eta_decay = 1, dropout = 0):
         """
@@ -43,6 +43,8 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         self.initial_weight = initial_weight
         self.eta_decay = eta_decay
         self.dropout = dropout
+        self.tree_eta = tree_eta
+    
     
     def fit(self, X, y):
         X, y = check_X_y(X, y, accept_sparse=False)
@@ -52,6 +54,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample, self.row_subsample, self.warmup_depth, self.eta, self.reg_lambda, self.reg_gamma, self.initial_weight, self.eta_decay, self.dropout = check_params(
             self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample, self.row_subsample, self.warmup_depth, self.eta, self.reg_gamma, self.reg_lambda, self.initial_weight, self.eta_decay, self.dropout)
         
+        self.weights = np.ones(self.n_trees) * 1 / self.n_trees #Initial weights
         self.feature_importances_ = np.zeros(self.n_features_in_)
         self.feature_splits = np.zeros(self.n_features_in_)
         self.num_features_considering = max(int(self.n_features_in_ * self.feature_subsample), 1)
@@ -83,7 +86,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
             
         #---- GIBBS TREE CREATION ----#
         #Round-robin -- with max_depth = N and initial depth D, we should have 2^N - 2^D splits
-        for _ in range(2**self.max_depth - 2**self.warmup_depth):
+        for idx in range(2**self.max_depth - 2**self.warmup_depth):
             #Randomly selecting the permutation of trees to update
             tree_permutation = np.random.permutation(self.n_trees)
             
@@ -97,17 +100,18 @@ class GibbsForest(RegressorMixin, BaseEstimator):
 
             #Getting predictions for the current batch of rows
             batch_predictions = [predictions[row_idx] for predictions in self._predictions]
-            
             for tree_idx in tree_permutation:
                 # ---- Dropout condition: skip updating this tree with probability self.dropout ----
                 if random.random() < self.dropout:
                     continue  # skip update, move to the next tree
 
                 tree = self._trees[tree_idx]
-                predictions_without_tree = np.delete(batch_predictions, tree_idx, 0)
-                mean_predictions_without_tree = np.mean(predictions_without_tree, axis = 0)
+                individual_predictions_without_tree = np.delete(batch_predictions, tree_idx, 0)
+                weights_without_tree = np.delete(self.weights, tree_idx)
+                predictions_without_tree = weights_without_tree @ individual_predictions_without_tree
                 
-                error_reduction, best_split = tree.get_best_split(X_batch, y_batch, mean_predictions_without_tree, self.n_trees - 1, 
+                #Get best split with these weights
+                error_reduction, best_split = tree.get_best_split(X_batch, y_batch, predictions_without_tree, self.weights[tree_idx], 
                                                                   self.eta)
                 if error_reduction > self.reg_gamma: #Only split if gain is above gamma
                     tree.split(X_batch, y_batch)
@@ -121,6 +125,43 @@ class GibbsForest(RegressorMixin, BaseEstimator):
                     self.feature_splits[best_split] += 1
             
             self.eta *= self.eta_decay
+            
+            if idx < 2: #Don't change tree weights for a little while
+                continue
+            
+            #Updating tree weights with math in adaptive weights.pdf
+            current_predictions = self.weights @ self._predictions
+            current_error = self.loss_fn(y, current_predictions)
+            
+            current_predictions = current_predictions
+            
+            pred_gradients = self.loss_fn.gradient(y, current_predictions)
+            pred_gradients = pred_gradients.reshape(-1, 1)
+            gradients = self._predictions @ pred_gradients
+            
+            pred_hessian = self.loss_fn.hessian(y, current_predictions)
+            pred_hessian = pred_hessian
+            hessian = self._predictions * pred_hessian @ self._predictions.T
+            
+            damping = 1e-6
+            inv_hessian = np.linalg.inv(hessian + damping * np.eye(self.n_trees))
+            
+            weight_update = - inv_hessian @ (gradients - np.ones((self.n_trees, 1)) * 
+                                                (np.ones((1, self.n_trees)) @ inv_hessian @ gradients) / (np.ones((1, self.n_trees)) @ inv_hessian @ np.ones((self.n_trees, 1))))
+            weight_update = weight_update.flatten()
+            
+            self.weights += self.tree_eta * weight_update
+            #Updating weights, removing trees below 0
+            below_0_idx = np.where(self.weights < 0)
+            self.weights = np.delete(self.weights, below_0_idx)
+            self._predictions = np.delete(self._predictions, below_0_idx, 0)
+            self._trees = np.delete(self._trees, below_0_idx)
+            self.weights = self.weights / np.sum(self.weights)
+            self.n_trees = len(self.weights)         
+            
+            errors_after = self.loss_fn(y, self.weights @ self._predictions)
+            print(f"Error after: {errors_after}")
+            print(f"Error differential: {errors_after - current_error}")   
         return self 
         
 
@@ -134,4 +175,4 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         predictions = []
         for tree in self._trees:
             predictions.append(tree.predict(X_predict))
-        return np.mean(predictions, axis = 0)
+        return self.weights @ np.array(predictions)
