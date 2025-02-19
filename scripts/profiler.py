@@ -7,6 +7,7 @@ from src import Losses
 import logging
 import line_profiler as profile
 import os
+import matplotlib.pyplot as plt
 
 os.environ['LINE_PROFILE'] = "1"
 
@@ -33,17 +34,14 @@ task = openml.tasks.get_task(task_id)
 X, y = task.get_X_and_y()
 print(f"Y mean: {y.mean():.4f}")
 
-gibbs_params = {"eta": 0.1,
-            "feature_subsample": 0.9,
+gibbs_params = {"leaf_eta": 0.1,
             "max_depth": 5,
             "min_samples": 2,
             "n_trees": 100, 
-            'row_subsample': 0.9, 
             'warmup_depth': 2, 
             'loss_fn': Losses.LeastSquaresLoss(), 
             'reg_lambda': 0.01,
-            'reg_gamma': 0, 
-            'tree_eta': 0}
+            'tree_eta': 0.05}
 
 dyna = GibbsForest(**gibbs_params)
 

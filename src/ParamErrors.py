@@ -1,20 +1,22 @@
 import numpy as np
 from .Losses import BaseLoss
-from typing import SupportsFloat
 
 def check_params(
-    loss_fn,
-    n_trees,
+    X,
+    loss_fn, 
+    n_trees, 
     max_depth, 
-    min_samples,
-    feature_subsample, 
-    row_subsample, 
+    min_samples, 
+    feature_subsample_rf, 
+    row_subsample_rf, 
+    feature_subsample_g, 
+    row_subsample_g, 
     warmup_depth, 
-    eta, 
+    leaf_eta, 
+    tree_eta, 
     reg_lambda, 
     reg_gamma, 
     initial_weight, 
-    eta_decay, 
     dropout
 ):
     """
@@ -40,18 +42,21 @@ def check_params(
     elif not isinstance(min_samples, int):
         raise ValueError('min_samples must be an integer or None')
 
-    #--- feature_subsample ---
-    if not isinstance(feature_subsample, SupportsFloat):
-        raise TypeError("feature_subsample must be a float or convertible to one")
-    if feature_subsample > 1 or feature_subsample < 0:
-        raise ValueError("feature_subsample must be between 0 and 1")
+    #--- subsamples ---
+    if feature_subsample_rf == 'sqrt':
+        feature_subsample_rf = np.sqrt(len(X[0])) / len(X[0])
+        
+    if feature_subsample_g == 'sqrt':
+        feature_subsample_g = np.sqrt(len(X[0])) / len(X[0])
+            
+    for subsample in [feature_subsample_rf, feature_subsample_g, row_subsample_rf, row_subsample_g]:
+        if not isinstance(subsample, (int, float)):
+            raise TypeError("subsample must be a float or convertible to one")
+        if subsample > 1 or subsample < 0:
+            raise ValueError("subsample must be between 0 and 1")
     
-    #--- row_subsample ---
-    if not isinstance(row_subsample, SupportsFloat):
-        raise TypeError("row_subsample must be a float or convertible to one")
-    if row_subsample > 1 or row_subsample < 0:
-        raise ValueError("row_subsample must be between 0 and 1")
 
+    
     #--- warmup_depth ---
     if warmup_depth == 'half':
         if max_depth == np.inf:
@@ -65,29 +70,41 @@ def check_params(
         raise ValueError("warmup_depth must be an integer")
 
     #--- eta ---
-    if not isinstance(eta, SupportsFloat):
-        raise TypeError("eta must be a float or convertibel to one")
-    if eta > 1 or eta < 0:
-        raise ValueError("eta must be between 0 and 1")
-    
-    #--- eta_decay ---
-    if not isinstance(eta_decay, SupportsFloat):
-        raise TypeError("eta must be a float or convertible to one")
-    
+    for eta in [leaf_eta, tree_eta]:
+        if not isinstance(eta, (int, float)):
+            raise TypeError("eta must be a float or convertible to one")
+        if eta > 1 or eta < 0:
+            raise ValueError("eta must be between 0 and 1")
+        
     #--- reg terms ---
-    if not (isinstance(reg_gamma, SupportsFloat) and isinstance(reg_lambda, SupportsFloat)):
-        raise ValueError('Regularization terms must be floats or convertible to one')
-    elif reg_gamma < 0 or reg_lambda < 0:
-        raise ValueError('Regularization Terms must be positive')
+    for reg in [reg_lambda, reg_gamma]:
+        if not (isinstance(reg, (int, float))):
+            raise TypeError("Regularization terms must be floats or convertible to one")
+        if reg < 0:
+            raise ValueError("Regularization terms must be positive")
     
     #initial weight
     if initial_weight not in ['parent', 'argmin']:
         raise ValueError("initial weight must be one of ['parent', 'argmin']")
     
     #--- dropout ---
-    if not isinstance(dropout, SupportsFloat):
+    if not isinstance(dropout, (int, float)):
         raise TypeError("dropout must be a float or convertible to one")
     if dropout > 1 or dropout < 0:
         raise ValueError("dropout must be between 0 and 1")
     
-    return loss_fn, n_trees, max_depth, min_samples, feature_subsample, row_subsample, warmup_depth, eta, reg_lambda, reg_gamma, initial_weight, eta_decay, dropout
+    return (loss_fn, 
+    n_trees, 
+    max_depth, 
+    min_samples, 
+    feature_subsample_rf, 
+    row_subsample_rf, 
+    feature_subsample_g, 
+    row_subsample_g, 
+    warmup_depth, 
+    leaf_eta, 
+    tree_eta, 
+    reg_lambda, 
+    reg_gamma, 
+    initial_weight, 
+    dropout)

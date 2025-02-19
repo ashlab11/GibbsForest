@@ -23,7 +23,7 @@ class LeafOrNode:
         self.next_to_split = None
      
          
-    def get_best_split(self, X, y, other_predictions, tree_weight, features_to_consider, eta):
+    def get_best_split(self, X, y, other_predictions, features_considered, tree_weight, eta):
         """Function that gets the best split for a node or leaf, but doesn't split it yet
         Note: new_tree is a boolean that tells us whether we are splitting a new tree or not, 
         which is necessary for error calculations. 
@@ -31,11 +31,11 @@ class LeafOrNode:
         if self.curr_depth == self.max_depth or len(y) <= self.min_samples:
             return (0, -1) #No error reduction possible
         if self.left == None and self.right == None:
-            return self.get_best_split_leaf(X, y, other_predictions, tree_weight, features_to_consider, eta)
+            return self.get_best_split_leaf(X, y, other_predictions, features_considered, tree_weight, eta)
         else:
-            return self.get_best_split_node(X, y, other_predictions, tree_weight, features_to_consider, eta)
+            return self.get_best_split_node(X, y, other_predictions, features_considered, tree_weight, eta)
         
-    def get_best_split_node(self, X, y, other_predictions, tree_weight, features_to_consider, eta):
+    def get_best_split_node(self, X, y, other_predictions, features_considered, tree_weight, eta):
         """Function that gets the best split for a node, but doesn't split it yet"""
         left_indices = X[:, self.curr_best_col] <= self.curr_best_splitting_val
         right_indices = ~left_indices
@@ -48,8 +48,8 @@ class LeafOrNode:
         left_y = y[left_indices]
         right_y = y[right_indices]
                 
-        left_best_error_reduction, left_col_split = self.left.get_best_split(left_X, left_y, left_other_predictions, tree_weight, features_to_consider, eta)
-        right_best_error_reduction, right_col_split = self.right.get_best_split(right_X, right_y, right_other_predictions, tree_weight, features_to_consider, eta)
+        left_best_error_reduction, left_col_split = self.left.get_best_split(left_X, left_y, left_other_predictions, features_considered, tree_weight, eta)
+        right_best_error_reduction, right_col_split = self.right.get_best_split(right_X, right_y, right_other_predictions, features_considered, tree_weight, eta)
         
         if left_best_error_reduction > right_best_error_reduction:
             self.curr_best_error_reduction = left_best_error_reduction
@@ -60,13 +60,13 @@ class LeafOrNode:
             self.next_to_split = self.right
             return right_best_error_reduction, right_col_split
 
-    def get_best_split_leaf(self, X, y, other_predictions, tree_weight, features_to_consider, eta):
+    def get_best_split_leaf(self, X, y, other_predictions, features_considered, tree_weight, eta):
         """Function that gets the best split for a leaf, but doesn't split it yet."""
         if np.isnan(other_predictions).any():
             print("NAN in other_predictions")
         
         gain, col, splitting_val, left_val, right_val = find_split(
-            X, y, other_predictions, self.val, tree_weight, features_to_consider = features_to_consider, min_samples=self.min_samples,
+            X, y, other_predictions, self.val, tree_weight, features_to_consider=features_considered, min_samples=self.min_samples,
             eta = eta, loss_fn=self.loss_fn, initial_weight = self.initial_weight)
     
         self.curr_best_col = col
@@ -85,8 +85,6 @@ class LeafOrNode:
         left_splits = 0
         right_splits = 0
         if self.curr_depth < warmup_depth:
-            #Testing parent 1 vs argmin 0
-            #On MSE, parent 1 and argmin 0 are the same
             gain, col, splitting_val, left_val, right_val = find_split(X, y, other_predictions= np.zeros(len(y)), leaf_weight = self.val, tree_weight=1, features_to_consider = features_considered, min_samples=self.min_samples,
                     eta = 1, loss_fn=self.loss_fn, initial_weight = "parent")
                         
