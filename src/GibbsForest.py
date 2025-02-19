@@ -8,57 +8,68 @@ from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
 class GibbsForest(RegressorMixin, BaseEstimator):
-    def __init__(self, loss_fn = LeastSquaresLoss(), n_trees = 10, max_depth = 3, min_samples = 2, 
-                 feature_subsample = 1, row_subsample = 1, warmup_depth = 1, eta = 0.01, tree_eta = 0.05,
-                 reg_lambda = 0, reg_gamma = 0, initial_weight = 'parent', 
-                 eta_decay = 1, dropout = 0):
-        """
-        Parameters:
+    def __init__(self, 
+                loss_fn = LeastSquaresLoss(),
+                n_trees = 100, 
+                max_depth = 3, 
+                min_samples = 2, 
+                feature_subsample_rf = 'sqrt',
+                row_subsample_rf = 1,
+                feature_subsample_g = 1,
+                row_subsample_g = 1,
+                warmup_depth = 1,
+                leaf_eta = 0.01,
+                tree_eta = 0.05,
+                reg_lambda = 0, 
+                reg_gamma = 0, 
+                initial_weight = 'parent', 
+                dropout = 0):
+        """Parameters:
         loss_fn: loss function to use for the trees (default is LeastSquaresLoss)
         n_trees: number of trees to use in the forest (default is 10)
         max_depth: maximum depth of the trees (default is 3)
         min_samples: minimum number of samples in a node to split (default is 2)
-        feature_subsample: fraction of features to consider for each split (default is 1)
-        row_subsample: fraction of rows to consider for each split (default is 1)
+        feature_subsample_rf / feature_subsample_g: fraction of features to consider for each split for the initial RF creation / for later gibbs updates (default is 1)
+        row_subsample_rf / row_subsample_g : fraction of rows to consider for each split for the initial RF creation / for later gibbs updates (default is 1)
         warmup_depth: depth of each initial tree before using gibbs algorithm (default is 1)
-        eta: learning rate (default is 0.01)
+        leaf_eta: learning rate for leaf weights (default is 0.01)
+        tree_eta: learning rate for tree weights (default is 0.05)
         reg_lambda: L2 regularization parameter (default is 0)
         TODO: reg_alpha: L1 regularization parameter (default is 0)
         reg_gamma: min loss reduction to make a split (default is 0)
         initial_weight: initial weight of the tree (default is 'parent')
-        eta_decay: learning rate decay (default is 1)
         dropout: probability of skipping a tree update (default is 0)
         """
-        
         self.loss_fn = loss_fn
         self.n_trees = n_trees
-        self.eta = eta
-        self.warmup_depth = warmup_depth
-        self.feature_subsample = feature_subsample
         self.max_depth = max_depth
         self.min_samples = min_samples
-        self.row_subsample = row_subsample
+        self.feature_subsample_rf = feature_subsample_rf
+        self.row_subsample_rf = row_subsample_rf
+        self.feature_subsample_g = feature_subsample_g
+        self.row_subsample_g = row_subsample_g
+        self.warmup_depth = warmup_depth
+        self.leaf_eta = leaf_eta
+        self.tree_eta = tree_eta
         self.reg_lambda = reg_lambda
         self.reg_gamma = reg_gamma
         self.initial_weight = initial_weight
-        self.eta_decay = eta_decay
         self.dropout = dropout
-        self.tree_eta = tree_eta
-    
-    
+        
     def fit(self, X, y):
         X, y = check_X_y(X, y, accept_sparse=False)
         self.n_features_in_ = X.shape[1]  # for sklearn compliance
         
-        #Checking parameters
-        self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample, self.row_subsample, self.warmup_depth, self.eta, self.reg_lambda, self.reg_gamma, self.initial_weight, self.eta_decay, self.dropout = check_params(
-            self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample, self.row_subsample, self.warmup_depth, self.eta, self.reg_gamma, self.reg_lambda, self.initial_weight, self.eta_decay, self.dropout)
+        #Checking parameters -- really long function lol
+        (self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample_rf, self.row_subsample_rf, 
+         self.feature_subsample_g, self.row_subsample_g, self.warmup_depth, self.leaf_eta, self.tree_eta, self.reg_lambda, 
+         self.reg_gamma, self.initial_weight, self.dropout) = check_params(X, self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample_rf, self.row_subsample_rf, 
+         self.feature_subsample_g, self.row_subsample_g, self.warmup_depth, self.leaf_eta, self.tree_eta, self.reg_lambda, 
+         self.reg_gamma, self.initial_weight, self.dropout)
         
         self.weights = np.ones(self.n_trees) * 1 / self.n_trees #Initial weights
         self.feature_importances_ = np.zeros(self.n_features_in_)
         self.feature_splits = np.zeros(self.n_features_in_)
-        self.num_features_considering = max(int(self.n_features_in_ * self.feature_subsample), 1)
-        self.num_rows_considering = max(int(self.row_subsample * len(y)), 1)
         
         self._trees = []
         self._predictions = np.empty((self.n_trees, len(y)))
@@ -69,70 +80,72 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         bootstrapped_y = y.copy()
 
         #---- INITIAL TREE CREATION, UP TO WARMUP DEPTH ----#     
-        for i in range(self.n_trees):
-            bootstrapped_idx = np.random.choice(len(X), self.num_rows_considering, replace = True)
+        num_rows_considered = max(int(self.row_subsample_rf * len(y)), 1)
+        num_features_considered = max(int(self.n_features_in_ * self.feature_subsample_rf), 1)
+        for i in range(self.n_trees):    
+
+            bootstrapped_idx = np.random.choice(len(X), num_rows_considered, replace = True)
             bootstrapped_X = X[bootstrapped_idx]
             bootstrapped_y = y[bootstrapped_idx]
             
             tree = Tree(bootstrapped_X, bootstrapped_y, max_depth=self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight, 
                         loss_fn=self.loss_fn)
+            
             #Initial split -- no current tree-level predictions, and no predictions from any other splits
-            tree.initial_splits(bootstrapped_X, bootstrapped_y, self.warmup_depth, num_features_considered = self.num_features_considering)
+            tree.initial_splits(bootstrapped_X, bootstrapped_y, self.warmup_depth, num_features_considered = num_features_considered)
             self._trees.append(tree)
             
             #TODO: implement feature importance here
             self._predictions[i] = tree.predict(X)
             
         #---- GIBBS TREE CREATION ----#
+        num_features_considered = max(int(self.n_features_in_ * self.feature_subsample_g), 1)
+        num_rows_considered = max(int(self.row_subsample_g * len(y)), 1)
         #Round-robin -- with max_depth = N and initial depth D, we should have 2^N - 2^D splits
         for idx in range(2**self.max_depth - 2**self.warmup_depth):
+            features_considered = random.sample(range(self.n_features_in_), num_features_considered)
+            
+            rows_considered = np.random.choice(len(X), num_rows_considered, replace = False)
+            X_batch = X[rows_considered]
+            y_batch = y[rows_considered]
+            predictions_batch = self._predictions[:, rows_considered]
+            
             #Randomly selecting the permutation of trees to update
+            #TODO: Remove this probably, no need for random permutation
             tree_permutation = np.random.permutation(self.n_trees)
             
-            #Selecting the batch of rows to consider for this round robin
-            if self.row_subsample == 1:
-                row_idx = slice(None) #Select all rows, quickly
-            else:
-                row_idx = np.random.choice(len(X), self.num_rows_considering, replace = False)
-            X_batch = X[row_idx]
-            y_batch = y[row_idx]
-
-            #Getting predictions for the current batch of rows
-            batch_predictions = [predictions[row_idx] for predictions in self._predictions]
             for tree_idx in tree_permutation:
                 # ---- Dropout condition: skip updating this tree with probability self.dropout ----
                 if random.random() < self.dropout:
                     continue  # skip update, move to the next tree
-
+                
+                #Getting predictions/weights without chosen tree
                 tree = self._trees[tree_idx]
-                individual_predictions_without_tree = np.delete(batch_predictions, tree_idx, 0)
+                individual_predictions_without_tree = np.delete(predictions_batch, tree_idx, 0)
                 weights_without_tree = np.delete(self.weights, tree_idx)
                 predictions_without_tree = weights_without_tree @ individual_predictions_without_tree
                 
+                
                 #Get best split with these weights
-                error_reduction, best_split = tree.get_best_split(X_batch, y_batch, predictions_without_tree, self.weights[tree_idx], 
-                                                                  self.eta)
+                error_reduction, best_split = tree.get_best_split(X_batch, y_batch, predictions_without_tree, features_considered, self.weights[tree_idx], 
+                                                                  self.leaf_eta)
                 if error_reduction > self.reg_gamma: #Only split if gain is above gamma
-                    tree.split(X_batch, y_batch)
+                    tree.split(X, y)
                     
                     #Predictions are based on the entire X, not X_batch, and new_predictions must be updated similarly
                     self._predictions[tree_idx] = tree.predict(X)
-                    batch_predictions[tree_idx] = self._predictions[tree_idx][row_idx]
+                    predictions_batch[tree_idx] = self._predictions[tree_idx][rows_considered]
+
                     
                     #Updating feature importances and splits
                     self.feature_importances_[best_split] += error_reduction
                     self.feature_splits[best_split] += 1
-            
-            self.eta *= self.eta_decay
-            
+                        
             if idx < 2: #Don't change tree weights for a little while
                 continue
             
-            #Updating tree weights with math in adaptive weights.pdf
+            #--- UPDATING TREE WEIGHTS ---#
             current_predictions = self.weights @ self._predictions
-            current_error = self.loss_fn(y, current_predictions)
-            
-            current_predictions = current_predictions
             
             pred_gradients = self.loss_fn.gradient(y, current_predictions)
             pred_gradients = pred_gradients.reshape(-1, 1)
@@ -150,6 +163,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
             weight_update = weight_update.flatten()
             
             self.weights += self.tree_eta * weight_update
+            
             #Updating weights, removing trees below 0
             below_0_idx = np.where(self.weights < 0)
             self.weights = np.delete(self.weights, below_0_idx)
@@ -157,18 +171,12 @@ class GibbsForest(RegressorMixin, BaseEstimator):
             self._trees = np.delete(self._trees, below_0_idx)
             self.weights = self.weights / np.sum(self.weights)
             self.n_trees = len(self.weights)         
-            
-            errors_after = self.loss_fn(y, self.weights @ self._predictions)
-            print(f"Error after: {errors_after}")
-            print(f"Error differential: {errors_after - current_error}")   
         return self 
         
 
     def predict(self, X_predict):
         X_predict = check_array(X_predict, accept_sparse=False)
         check_is_fitted(self, 'n_features_in_')  # raises NotFittedError if missing
-        print(f"This forest has a total of {sum([tree.num_splits for tree in self._trees])} splits")
-        print(f"This forest has a total of {len(self._trees)} trees")
         
         """We want to go through each tree and combine predictions"""
         predictions = []

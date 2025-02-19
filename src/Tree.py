@@ -17,8 +17,8 @@ class Tree:
         features_considered = random.sample(range(X.shape[1]), num_features_considered) 
         num_splits = self.root.initial_split(X, y, warmup_depth, features_considered)
         self.num_splits += num_splits
-    def get_best_split(self, X, y, other_predictions, tree_weight, eta):
-        return self.root.get_best_split(X, y, other_predictions, tree_weight, eta) 
+    def get_best_split(self, X, y, other_predictions, features_considered, tree_weight, eta):
+        return self.root.get_best_split(X, y, other_predictions, features_considered, tree_weight, eta) 
     def split(self, X, y):
         """Function that splits the tree"""
         self.root.split(X, y)
