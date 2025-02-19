@@ -74,11 +74,10 @@ class GibbsForest(RegressorMixin, BaseEstimator):
             bootstrapped_X = X[bootstrapped_idx]
             bootstrapped_y = y[bootstrapped_idx]
             
-            tree = Tree(bootstrapped_X, bootstrapped_y, num_features_considering = self.num_features_considering, 
-                        max_depth=self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight, 
+            tree = Tree(bootstrapped_X, bootstrapped_y, max_depth=self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight, 
                         loss_fn=self.loss_fn)
             #Initial split -- no current tree-level predictions, and no predictions from any other splits
-            tree.initial_splits(bootstrapped_X, bootstrapped_y, self.warmup_depth)
+            tree.initial_splits(bootstrapped_X, bootstrapped_y, self.warmup_depth, num_features_considered = self.num_features_considering)
             self._trees.append(tree)
             
             #TODO: implement feature importance here

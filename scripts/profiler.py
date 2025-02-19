@@ -34,7 +34,7 @@ X, y = task.get_X_and_y()
 print(f"Y mean: {y.mean():.4f}")
 
 gibbs_params = {"eta": 0.1,
-            "feature_subsample": 0.9,
+            "feature_subsample": 0.6,
             "max_depth": 5,
             "min_samples": 2,
             "n_trees": 100, 
@@ -43,7 +43,7 @@ gibbs_params = {"eta": 0.1,
             'loss_fn': Losses.LeastSquaresLoss(), 
             'reg_lambda': 0.01,
             'reg_gamma': 0, 
-            'tree_eta': 0}
+            'tree_eta': 0.05}
 
 dyna = GibbsForest(**gibbs_params)
 
