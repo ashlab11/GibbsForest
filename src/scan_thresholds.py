@@ -60,12 +60,12 @@ def find_split(X, y, other_predictions, leaf_weight, tree_weight, features_to_co
     #Predictions before splitting
     previous_predictions = other_predictions + init * tree_weight
     g_i = loss_fn.gradient(y, previous_predictions)
-    #Gets the diagonal elements of the hessian, which is what we care about
-    h_i = np.diag(loss_fn.hessian(y, previous_predictions))
+    h_i = loss_fn.hessian(y, previous_predictions)
      
     G = np.sum(g_i)
     H = np.sum(h_i) + eps
-    
+    if (H * tree_weight**2 + reg_lambda) == 0:
+        print(f"Division by 0. Tree weight is {tree_weight}, reg_lambda is {reg_lambda}")
     prev_score = 1 / 2 * (tree_weight * G + init * reg_lambda) ** 2 / (H * tree_weight**2 + reg_lambda)
     for col in features_to_consider:
         sort_idx = np.argsort(X[:, col])

@@ -76,7 +76,7 @@ class LeastSquaresLoss(BaseLoss):
         return y_pred - y_true
 
     def hessian(self, y_true, y_pred):
-        return np.diag(np.ones_like(y_true))
+        return np.ones_like(y_true)
 
     def argmin(self, y_true):
         return np.mean(y_true)
@@ -93,7 +93,7 @@ class LeastAbsoluteLoss(BaseLoss):
         return np.sign(y_pred - y_true)
 
     def hessian(self, y_true, y_pred):
-        return np.zeros((len(y_true), len(y_true)))
+        return np.zeros(len(y_true))
 
     def argmin(self, y_true):
         return np.median(y_true)
