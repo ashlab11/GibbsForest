@@ -110,17 +110,13 @@ class GibbsForest(RegressorMixin, BaseEstimator):
             y_batch = y[rows_considered]
             predictions_batch = self._predictions[:, rows_considered]
             
-            #Randomly selecting the permutation of trees to update
-            #TODO: Remove this probably, no need for random permutation
-            tree_permutation = np.random.permutation(self.n_trees)
-            
-            for tree_idx in tree_permutation:
+            #Going through each tree
+            for tree_idx, tree in enumerate(self._trees):
                 # ---- Dropout condition: skip updating this tree with probability self.dropout ----
                 if random.random() < self.dropout:
                     continue  # skip update, move to the next tree
                 
                 #Getting predictions/weights without chosen tree
-                tree = self._trees[tree_idx]
                 individual_predictions_without_tree = np.delete(predictions_batch, tree_idx, 0)
                 weights_without_tree = np.delete(self.weights, tree_idx)
                 predictions_without_tree = weights_without_tree @ individual_predictions_without_tree

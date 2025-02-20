@@ -8,6 +8,7 @@ import logging
 import line_profiler as profile
 import os
 import matplotlib.pyplot as plt
+import numpy as np
 
 os.environ['LINE_PROFILE'] = "1"
 
@@ -34,6 +35,8 @@ task = openml.tasks.get_task(task_id)
 X, y = task.get_X_and_y()
 print(f"Y mean: {y.mean():.4f}")
 
+print(np.sqrt(len(X[0])) / len(X[0]))
+
 gibbs_params = {"leaf_eta": 0.1,
             "max_depth": 5,
             "min_samples": 2,
@@ -41,7 +44,11 @@ gibbs_params = {"leaf_eta": 0.1,
             'warmup_depth': 2, 
             'loss_fn': Losses.LeastSquaresLoss(), 
             'reg_lambda': 0.01,
-            'tree_eta': 0.05}
+            'tree_eta': 0.3, 
+            'feature_subsample_rf': 'sqrt',
+            'row_subsample_rf': 0.5,
+            'feature_subsample_g': 1, 
+            'row_subsample_g': 1}
 
 dyna = GibbsForest(**gibbs_params)
 

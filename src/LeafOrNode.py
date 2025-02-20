@@ -90,7 +90,7 @@ class LeafOrNode:
                         
             if splitting_val is None:
                 #When no further splits can be made, stop initial splits
-                return
+                return 0
             
             self.curr_best_col = col
             self.curr_best_splitting_val = splitting_val
