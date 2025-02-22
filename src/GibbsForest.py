@@ -23,7 +23,8 @@ class GibbsForest(RegressorMixin, BaseEstimator):
                 reg_lambda = 0, 
                 reg_gamma = 0, 
                 initial_weight = 'parent', 
-                dropout = 0):
+                dropout = 0,
+                random_state = None):
         """Parameters:
         loss_fn: loss function to use for the trees (default is LeastSquaresLoss)
         n_trees: number of trees to use in the forest (default is 10)
@@ -55,6 +56,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         self.reg_gamma = reg_gamma
         self.initial_weight = initial_weight
         self.dropout = dropout
+        self.random_state = random_state
         
     def fit(self, X, y):
         X, y = check_X_y(X, y, accept_sparse=False)
@@ -83,8 +85,8 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         num_rows_considered = max(int(self.row_subsample_rf * len(y)), 1)
         num_features_considered = max(int(self.n_features_in_ * self.feature_subsample_rf), 1)
         for i in range(self.n_trees):    
-
-            bootstrapped_idx = np.random.choice(len(X), num_rows_considered, replace = True)
+            rng = np.random.default_rng(seed = None if self.random_state is None else self.random_state + i)
+            bootstrapped_idx = rng.choice(len(X), num_rows_considered, replace = True)
             bootstrapped_X = X[bootstrapped_idx]
             bootstrapped_y = y[bootstrapped_idx]
             
@@ -92,7 +94,8 @@ class GibbsForest(RegressorMixin, BaseEstimator):
                         loss_fn=self.loss_fn)
             
             #Initial split -- no current tree-level predictions, and no predictions from any other splits
-            tree.initial_splits(bootstrapped_X, bootstrapped_y, self.warmup_depth, num_features_considered = num_features_considered)
+            tree.initial_splits(bootstrapped_X, bootstrapped_y, self.warmup_depth, num_features_considered = num_features_considered, 
+                                rng = rng)
             self._trees.append(tree)
             
             #TODO: implement feature importance here
@@ -103,17 +106,18 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         num_rows_considered = max(int(self.row_subsample_g * len(y)), 1)
         #Round-robin -- with max_depth = N and initial depth D, we should have 2^N - 2^D splits
         for idx in range(2**self.max_depth - 2**self.warmup_depth):
-            features_considered = random.sample(range(self.n_features_in_), num_features_considered)
-            
-            rows_considered = np.random.choice(len(X), num_rows_considered, replace = False)
+            rng = np.random.default_rng(seed = None if self.random_state is None else self.random_state + idx)
+            features_considered = rng.choice(self.n_features_in_, num_features_considered)
+            rows_considered = rng.choice(len(X), num_rows_considered, replace = False)            
             X_batch = X[rows_considered]
             y_batch = y[rows_considered]
             predictions_batch = self._predictions[:, rows_considered]
             
             #Going through each tree
             for tree_idx, tree in enumerate(self._trees):
+                rng = np.random.default_rng(seed = None if self.random_state is None else self.random_state + tree_idx)
                 # ---- Dropout condition: skip updating this tree with probability self.dropout ----
-                if random.random() < self.dropout:
+                if rng.random() < self.dropout:
                     continue  # skip update, move to the next tree
                 
                 #Getting predictions/weights without chosen tree
