@@ -1,7 +1,6 @@
 import numpy as np
 from .scan_thresholds import get_best_sse, find_split
 from .Losses import *
-import random
 
 class LeafOrNode:
     def __init__(self, val, curr_depth = 0, max_depth = 3, min_samples = 2, initial_weight = 'parent', 

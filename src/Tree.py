@@ -12,9 +12,9 @@ class Tree:
         self.max_depth = max_depth
         self.num_splits = 0
         self.initial_weight = initial_weight
-    def initial_splits(self, X, y, warmup_depth, num_features_considered):
-        """Function that does the initial splits, up to a warmup depth"""   
-        features_considered = random.sample(range(X.shape[1]), num_features_considered) 
+    def initial_splits(self, X, y, warmup_depth, num_features_considered, rng = np.random.default_rng()):
+        """Function that does the initial splits, up to a warmup depth"""  
+        features_considered = rng.choice(X.shape[1], num_features_considered, replace = False)
         num_splits = self.root.initial_split(X, y, warmup_depth, features_considered)
         self.num_splits += num_splits
     def get_best_split(self, X, y, other_predictions, features_considered, tree_weight, eta):

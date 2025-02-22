@@ -44,11 +44,12 @@ gibbs_params = {"leaf_eta": 0.1,
             'warmup_depth': 2, 
             'loss_fn': Losses.LeastSquaresLoss(), 
             'reg_lambda': 0.01,
-            'tree_eta': 0.3, 
+            'tree_eta': 0.05, 
             'feature_subsample_rf': 'sqrt',
             'row_subsample_rf': 0.5,
             'feature_subsample_g': 1, 
-            'row_subsample_g': 1}
+            'row_subsample_g': 1, 
+            'random_state': 42}
 
 dyna = GibbsForest(**gibbs_params)
 
