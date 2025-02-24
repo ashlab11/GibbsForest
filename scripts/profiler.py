@@ -1,6 +1,7 @@
 import openml
 from openml.tasks import list_tasks, TaskType
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.datasets import fetch_california_housing
 from xgboost import XGBRegressor
 from src import GibbsForest
 from src import Losses
@@ -33,21 +34,22 @@ from src import Losses
 task_id = small_tasks_ids[0]
 task = openml.tasks.get_task(task_id)
 X, y = task.get_X_and_y()
+X, y = fetch_california_housing(return_X_y = True)
 print(f"Y mean: {y.mean():.4f}")
 
 print(np.sqrt(len(X[0])) / len(X[0]))
 
-gibbs_params = {"leaf_eta": 0.1,
+gibbs_params = {"leaf_eta": 0.2,
             "max_depth": 5,
-            "min_samples": 2,
+            "min_samples": 5,
             "n_trees": 100, 
             'warmup_depth': 2, 
             'loss_fn': Losses.LeastSquaresLoss(), 
-            'reg_lambda': 0.01,
+            'reg_lambda': 10,
             'tree_eta': 0.05, 
             'feature_subsample_rf': 'sqrt',
             'row_subsample_rf': 0.5,
-            'feature_subsample_g': 1, 
+            'feature_subsample_g': 0.3, 
             'row_subsample_g': 1, 
             'random_state': 42}
 
@@ -70,14 +72,19 @@ xgb = XGBRegressor(**xgb_params)
             "n_estimators": 68}
 dyna = RandomForestRegressor(**rf_params)"""
 
+#--- COMPARING GIBBS FOREST TO XGBOOST ---#
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, random_state = 42)
 dyna.fit(X_train, y_train)
 train_error = mean_absolute_error(y_train, dyna.predict(X_train))
 train_loss = Losses.LeastSquaresLoss()(y_train, dyna.predict(X_train))
 test_error = mean_absolute_error(y_test, dyna.predict(X_test))
+print("--- GIBBS FOREST ---")
 print(f"Train error: {train_error:.4f}, train loss: {train_loss:.4f}")
 print(f"Test error: {test_error:.4f}")
-"""booster = dyna.get_booster()
-df = booster.trees_to_dataframe()
-total_leaves = (df["Feature"] == "Leaf").sum()
-print(f"Total leaves: {total_leaves}")"""
+
+xgb.fit(X_train, y_train)
+train_error = mean_absolute_error(y_train, xgb.predict(X_train))
+test_error = mean_absolute_error(y_test, xgb.predict(X_test))
+print("--- XGBOOST ---")
+print(f"Train error: {train_error:.4f}")
+print(f"Test error: {test_error:.4f}")

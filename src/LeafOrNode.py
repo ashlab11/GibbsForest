@@ -1,10 +1,12 @@
 import numpy as np
+from .hist_splitting import HistSplitter
 from .scan_thresholds import get_best_sse, find_split
 from .Losses import *
+import time
 
 class LeafOrNode:
     def __init__(self, val, curr_depth = 0, max_depth = 3, min_samples = 2, initial_weight = 'parent', 
-                 loss_fn = LeastSquaresLoss()):
+                 loss_fn = LeastSquaresLoss(), hist_splitter = None):
         #Values given from the tree
         self.max_depth = max_depth
         self.min_samples = min_samples
@@ -12,6 +14,7 @@ class LeafOrNode:
         self.val = val
         self.initial_weight = initial_weight
         self.loss_fn = loss_fn
+        self.hist_splitter = hist_splitter
 
         #Values calculated by splits
         self.left = None
@@ -64,10 +67,21 @@ class LeafOrNode:
         if np.isnan(other_predictions).any():
             print("NAN in other_predictions")
         
+        """old_start = time.time()
         gain, col, splitting_val, left_val, right_val = find_split(
             X, y, other_predictions, self.val, tree_weight, features_to_consider=features_considered, min_samples=self.min_samples,
             eta = eta, loss_fn=self.loss_fn, initial_weight = self.initial_weight)
-    
+        
+        time_old = time.time() - old_start
+        #Testing new splitting method
+        """
+        new_start = time.time() 
+        gain, col, splitting_val, left_val, right_val, missing_goes_left = self.hist_splitter.find_split_hist(X, y, other_predictions, self.val, tree_weight, features_to_consider=features_considered, 
+                                                                                            min_samples=self.min_samples, eta = eta, loss_fn=self.loss_fn, 
+                                                                                            initial_weight = self.initial_weight)
+        time_new = time.time() - new_start
+        #print("New speedup: ", time_old / time_new)
+        
         self.curr_best_col = col
         self.curr_best_splitting_val = splitting_val
         self.left_val = left_val
@@ -112,6 +126,7 @@ class LeafOrNode:
             raise ValueError("Error: No error reduction possible")
         else:
             if self.next_to_split == None:
+                #Creating a leaf, keeping idxs for future use
                 self.split_leaf()
             else:
                 #Splitting the node for real!
@@ -127,8 +142,8 @@ class LeafOrNode:
                     self.right.split(right_X, right_y)
                 
     def split_leaf(self):
-        self.left = LeafOrNode(self.left_val, curr_depth= self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight)
-        self.right = LeafOrNode(self.right_val, curr_depth = self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight)
+        self.left = LeafOrNode(self.left_val, curr_depth= self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight, loss_fn = self.loss_fn, hist_splitter=self.hist_splitter)
+        self.right = LeafOrNode(self.right_val, curr_depth = self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight, loss_fn = self.loss_fn, hist_splitter=self.hist_splitter)
         return None
      
     def predict(self, X_predict = None):

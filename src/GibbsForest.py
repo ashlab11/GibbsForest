@@ -4,6 +4,7 @@ from .Tree import Tree
 from .Losses import *
 from .LeafOrNode import LeafOrNode
 from .ParamErrors import check_params
+from .hist_splitting import HistSplitter
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
@@ -24,6 +25,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
                 reg_gamma = 0, 
                 initial_weight = 'parent', 
                 dropout = 0,
+                n_bins = 256,
                 random_state = None):
         """Parameters:
         loss_fn: loss function to use for the trees (default is LeastSquaresLoss)
@@ -57,7 +59,8 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         self.initial_weight = initial_weight
         self.dropout = dropout
         self.random_state = random_state
-        
+        self.n_bins = n_bins
+    
     def fit(self, X, y):
         X, y = check_X_y(X, y, accept_sparse=False)
         self.n_features_in_ = X.shape[1]  # for sklearn compliance
@@ -68,13 +71,14 @@ class GibbsForest(RegressorMixin, BaseEstimator):
          self.reg_gamma, self.initial_weight, self.dropout) = check_params(X, self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample_rf, self.row_subsample_rf, 
          self.feature_subsample_g, self.row_subsample_g, self.warmup_depth, self.leaf_eta, self.tree_eta, self.reg_lambda, 
          self.reg_gamma, self.initial_weight, self.dropout)
-        
+                 
         self.weights = np.ones(self.n_trees) * 1 / self.n_trees #Initial weights
         self.feature_importances_ = np.zeros(self.n_features_in_)
         self.feature_splits = np.zeros(self.n_features_in_)
         
         self._trees = []
         self._predictions = np.empty((self.n_trees, len(y)))
+        self.hist_splitter = HistSplitter(X, n_bins=self.n_bins)
         
         X = np.array(X)
         y = np.array(y)
@@ -82,6 +86,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         bootstrapped_y = y.copy()
 
         #---- INITIAL TREE CREATION, UP TO WARMUP DEPTH ----#     
+        #Creating hist splitter class        
         num_rows_considered = max(int(self.row_subsample_rf * len(y)), 1)
         num_features_considered = max(int(self.n_features_in_ * self.feature_subsample_rf), 1)
         for i in range(self.n_trees):    
@@ -90,8 +95,9 @@ class GibbsForest(RegressorMixin, BaseEstimator):
             bootstrapped_X = X[bootstrapped_idx]
             bootstrapped_y = y[bootstrapped_idx]
             
+            
             tree = Tree(bootstrapped_X, bootstrapped_y, max_depth=self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight, 
-                        loss_fn=self.loss_fn)
+                        loss_fn=self.loss_fn, hist_splitter = self.hist_splitter)
             
             #Initial split -- no current tree-level predictions, and no predictions from any other splits
             tree.initial_splits(bootstrapped_X, bootstrapped_y, self.warmup_depth, num_features_considered = num_features_considered, 
@@ -112,7 +118,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
             X_batch = X[rows_considered]
             y_batch = y[rows_considered]
             predictions_batch = self._predictions[:, rows_considered]
-            
+                        
             #Going through each tree
             for tree_idx, tree in enumerate(self._trees):
                 rng = np.random.default_rng(seed = None if self.random_state is None else self.random_state + tree_idx)

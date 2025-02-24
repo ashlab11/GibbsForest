@@ -1,6 +1,6 @@
 import numpy as np
-from line_profiler import profile
 import warnings
+
 
 def find_split(X, y, other_predictions, leaf_weight, tree_weight, features_to_consider, loss_fn, 
                              min_samples = 2, eta = 0.1, reg_lambda = 0, initial_weight = 'parent', eps = 1e-6):
@@ -64,8 +64,6 @@ def find_split(X, y, other_predictions, leaf_weight, tree_weight, features_to_co
      
     G = np.sum(g_i)
     H = np.sum(h_i) + eps
-    if (H * tree_weight**2 + reg_lambda) == 0:
-        print(f"Division by 0. Tree weight is {tree_weight}, reg_lambda is {reg_lambda}")
     prev_score = 1 / 2 * (tree_weight * G + init * reg_lambda) ** 2 / (H * tree_weight**2 + reg_lambda)
     for col in features_to_consider:
         sort_idx = np.argsort(X[:, col])
