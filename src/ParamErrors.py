@@ -31,7 +31,7 @@ def check_params(
         raise ValueError('n_trees must be an integer greater than 1')
     
     #--- max_depth ---
-    if max_depth is None:
+    if max_depth is None or max_depth in [-1, 0, 'inf']:
         max_depth = np.inf
     elif not isinstance(max_depth, int):
         raise ValueError('max_depth must be an integer or None')

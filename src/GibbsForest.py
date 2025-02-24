@@ -12,7 +12,8 @@ class GibbsForest(RegressorMixin, BaseEstimator):
     def __init__(self, 
                 loss_fn = LeastSquaresLoss(),
                 n_trees = 100, 
-                max_depth = 3, 
+                max_depth = 3,
+                max_leaves = np.inf,
                 min_samples = 2, 
                 feature_subsample_rf = 'sqrt',
                 row_subsample_rf = 1,
@@ -46,6 +47,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         self.loss_fn = loss_fn
         self.n_trees = n_trees
         self.max_depth = max_depth
+        self.max_leaves = max_leaves
         self.min_samples = min_samples
         self.feature_subsample_rf = feature_subsample_rf
         self.row_subsample_rf = row_subsample_rf
@@ -95,7 +97,6 @@ class GibbsForest(RegressorMixin, BaseEstimator):
             bootstrapped_X = X[bootstrapped_idx]
             bootstrapped_y = y[bootstrapped_idx]
             
-            
             tree = Tree(bootstrapped_X, bootstrapped_y, max_depth=self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight, 
                         loss_fn=self.loss_fn, hist_splitter = self.hist_splitter)
             
@@ -121,6 +122,9 @@ class GibbsForest(RegressorMixin, BaseEstimator):
                         
             #Going through each tree
             for tree_idx, tree in enumerate(self._trees):
+                if tree.num_leaves >= self.max_leaves:
+                    continue
+                
                 rng = np.random.default_rng(seed = None if self.random_state is None else self.random_state + tree_idx)
                 # ---- Dropout condition: skip updating this tree with probability self.dropout ----
                 if rng.random() < self.dropout:
