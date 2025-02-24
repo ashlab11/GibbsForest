@@ -248,7 +248,10 @@ for ds in regression_datasets:
                                                       "MAE_std": std_score,
                                                       "best_params": seed_params if model_info["tuned"] else None}
         print(f"{model_name} on {ds_name}: Average MAE = {avg_score:.4f} ± {std_score:.4f}")
-
+        
+    print("MODEL COMPARISON ON DATASET: ", ds_name)
+    for model_name in results["regression"][ds_name]:
+        print(f"{model_name} performance: {results["regression"][ds_name][model_name]["MAE_mean"]} +- {results["regression"][ds_name][model_name]["MAE_std"]}")
 # Classification experiments
 for ds in classification_datasets:
     ds_name = ds["name"]

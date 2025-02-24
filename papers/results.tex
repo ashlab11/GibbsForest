@@ -13,30 +13,51 @@
 
 \begin{table}[ht]
     \centering
-    \caption{Classification Results (Accuracy)}
-    \begin{tabular}{lcccccc}
+    \caption{Regression Results (MSE)}
+    \begin{tabular}{lccccccc}
     \hline
-    Dataset & GF (T) & GF (U) & RF & XGB & LGBM & CatBoost \\
+    Dataset & Obs. & Dim. & GF & RF & XGB & LGBM & CatBoost \\
     \hline
-    Breast Cancer & -- & -- & -- & -- & -- & -- \\
-    Iris          & -- & -- & -- & -- & -- & -- \\
+    California Housing & 20640 & 8 & -- & -- & -- & -- & -- \\
+    Wine Quality          & 4898 & 11 & -- & -- & -- & -- & -- \\
+    Concrete Strength          & 1030 & 9 & -- & -- & -- & -- & -- \\
+    Airfoil Self Noise          & 1503 & 5 & -- & -- & -- & -- & -- \\
+    Energy Efficiency          & 768 & 8 & -- & -- & -- & -- & -- \\
+    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
+    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
+    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
+    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
+    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
+    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
+    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
+    \hline
+    \end{tabular}
+    \label{tab:regression_results}
+    \end{table}
+\begin{table}[ht]
+    \centering
+    \caption{Classification Results (Log-Loss)}
+    \begin{tabular}{lcccccccc}
+    \hline
+    Dataset & Obs. & Dim. & GF & RF & XGB & LGBM & CatBoost \\
+    \hline
+    10M Higgs & 11M & 28 & -- & -- & -- & -- & -- \\
+    Cardiovascular Disease          & -- & 11 & -- & -- & -- & -- & -- \\
+    Heart Disease          & -- & -- & -- & -- & -- & -- & -- \\
+    Airline Satisfaction          & -- & -- & -- & -- & -- & -- & -- \\
+    Health Insurance Interest          & -- & -- & -- & -- & -- & -- & -- \\
+    L\&T Vehicle Loan          & -- & -- & -- & -- & -- & -- & -- \\
+    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
+    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
+    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
+    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
+    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
+    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
     \hline
     \end{tabular}
     \label{tab:classification_results}
     \end{table}
 
-\begin{table}[ht]
-    \centering
-    \caption{Regression Results (MSE)}
-    \begin{tabular}{lcccccc}
-    \hline
-    Dataset & GF (T) & GF (U) & RF & XGB & LGBM & CatBoost \\
-    \hline
-    Breast Cancer & -- & -- & -- & -- & -- & -- \\
-    Iris          & -- & -- & -- & -- & -- & -- \\
-    \hline
-    \end{tabular}
-    \label{tab:regression_results}
-    \end{table}
+
 
 \end{document}
