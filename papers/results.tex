@@ -13,25 +13,52 @@
 
 \begin{table}[ht]
     \centering
+    \begin{tabular}{lrr}
+    \hline
+    \textbf{Dataset} & \textbf{Observations} & \textbf{Features} \\ \hline
+    cpu\_act                & 8,192    & 22  \\
+    pol                     & 15,000   & 27  \\
+    elevators             & 16,599   & 17  \\
+    isolet                  & 7,797    & 614 \\
+    wine\_quality          & 6,497    & 12  \\
+    Ailerons              & 13,750   & 34  \\
+    houses                & 20,640   & 9   \\
+    house\_16H            & 22,784   & 17  \\
+    diamonds              & 53,940   & 7   \\
+    Brazilian\_houses     & 10,692   & 9   \\
+    Bike\_Sharing\_Demand  & 17,379   & 7   \\
+    nyc-taxi-green-dec-2016& 581,835  & 10  \\
+    house\_sales          & 21,613   & 16  \\
+    sulfur                & 10,081   & 7   \\
+    medical\_charges      & 163,065  & 4   \\
+    MiamiHousing2016      & 13,932   & 14  \\
+    superconduct          & 21,263   & 80  \\
+    california            & 20,640   & 9   \\
+    fifa                  & 18,063   & 6   \\
+    year                  & 515,345  & 91  \\ \hline
+    \end{tabular}
+    \caption{Overview of regression datasets including the number of observations and features.}
+    \label{tab:datasets}
+    \end{table}
+    
+\begin{table}[ht]
+    \centering
     \caption{Regression Results (MSE)}
-    \begin{tabular}{lccccccc}
+    \begin{tabular}{lccccc}
     \hline
-    Dataset & Obs. & Dim. & GF & RF & XGB & LGBM & CatBoost \\
+    Dataset & GF & RF & XGB & LGBM & Diff. \\
     \hline
-    California Housing & 20640 & 8 & -- & -- & -- & -- & -- \\
-    Wine Quality          & 4898 & 11 & -- & -- & -- & -- & -- \\
-    Concrete Strength          & 1030 & 9 & -- & -- & -- & -- & -- \\
-    Airfoil Self Noise          & 1503 & 5 & -- & -- & -- & -- & -- \\
-    Energy Efficiency          & 768 & 8 & -- & -- & -- & -- & -- \\
-    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
-    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
-    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
-    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
-    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
-    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
-    Wine Quality          & -- & -- & -- & -- & -- & -- & -- \\
+    cpu act          & \textbf{5.25} (0.11) & 10.40 (0.14) & 5.37 (0.14) & 5.82 (0.26) & 2.23\% \\
+    pol           & \textbf{20.93} (0.56) & 132.61 (2.05) & 42.90 (1.08) & 22.42 (0.54) & 6.65\% \\
+    elevators ($10^{-6}$)          & \textbf{4.90} (0.05) & 14.86 (0.16) & 5.45 (0.07) & 4.99 (0.06) & 1.8\% \\
+    isolet          & -- & -- & -- & -- & -- \\
+    wine quality          & -- & -- & -- & -- & --\\
+    Wine Quality          & -- & -- & -- & -- & --\\
+    Wine Quality          & -- & -- & -- & -- & -- \\
     \hline
     \end{tabular}
+    \caption{Regression results for major tree-based models. The best result for each dataset is highlighted in bold. The final column shows the percentage difference between GF and the best non-GF model.
+    Std of the mean result is shown in parenthesis.}
     \label{tab:regression_results}
     \end{table}
 \begin{table}[ht]

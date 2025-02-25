@@ -10,21 +10,21 @@ class Tree:
         self.loss_fn = loss_fn
         self.min_samples = min_samples
         self.max_depth = max_depth
-        self.num_splits = 0
+        self.num_leaves = 1 #Starts at 1 and increases
         self.initial_weight = initial_weight
         self.hist_splitter = hist_splitter
     def initial_splits(self, X, y, warmup_depth, num_features_considered, rng = np.random.default_rng()):
         """Function that does the initial splits, up to a warmup depth"""  
         features_considered = rng.choice(X.shape[1], num_features_considered, replace = False)
-        num_splits = self.root.initial_split(X, y, warmup_depth, features_considered)
-        self.num_splits += num_splits
+        num_leaves = self.root.initial_split(X, y, warmup_depth, features_considered)
+        self.num_leaves += num_leaves
     def get_best_split(self, X, y, other_predictions, features_considered, tree_weight, eta):
         return self.root.get_best_split(X, y, other_predictions, features_considered, tree_weight, eta) 
     def split(self, X, y):
         """Function that splits the tree"""
         self.root.split(X, y)
-        self.num_splits += 1
+        self.num_leaves += 1
     def predict(self, X_predict):
         return self.root.predict(X_predict)
     def __repr__(self):
-        return f"Tree with {self.num_splits} splits"
+        return f"Tree with {self.num_leaves} leaves"

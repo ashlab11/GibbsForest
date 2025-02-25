@@ -69,16 +69,16 @@ param_dist_gibbs = {
     'tree_eta': uniform(0, 0.1),
     'feature_subsample_rf': uniform(0.5, 0.5), 
     'row_subsample_rf': uniform(0.5, 0.5), 
-    'warmup_depth': [1, 2, 'all-but-one']
+    'warmup_depth': [1, 2, 3]
 }
 
 #--- MODELS ---#
 models = {
+    'gibbs': (GibbsForest(), param_dist_gibbs),
     'lgbm': (LGBMRegressor(verbosity = -1, n_jobs = 1), param_dist_lgbm),
     'cat': (CatBoostRegressor(logging_level='Silent'), param_dist_cat),
     'rf': (RandomForestRegressor(), param_dist_rf),
     'xgb': (XGBRegressor(), param_dist_xgb),
-    'gibbs': (GibbsForest(), param_dist_gibbs)
 }
 
 benchmark_suite = openml.study.get_suite(297)
@@ -100,7 +100,7 @@ def get_max_depth(tree, current_depth=0):
     right_depth = get_max_depth(tree["right_child"], current_depth + 1) if "right_child" in tree else current_depth
     return max(left_depth, right_depth)
 
-for task_id in benchmark_suite.tasks[1:]:
+for task_id in benchmark_suite.tasks[4:]:
     task = openml.tasks.get_task(task_id)
     dataset = task.get_dataset()
     name = dataset.name
@@ -118,7 +118,8 @@ for task_id in benchmark_suite.tasks[1:]:
         print(f"----- MODEL: {model_name} -----")
         for seed in range(num_seeds):
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=seed)
-            cv = RandomizedSearchCV(model, param_dist, n_iter=30, cv=5, n_jobs=-1, random_state=seed, scoring='neg_mean_squared_error')
+            cv = RandomizedSearchCV(model, param_dist, n_iter=30, cv=5, n_jobs=-1, random_state=seed, scoring='neg_mean_squared_error', 
+                                    error_score='raise')
             cv.fit(X_train, y_train)
             if model_name == 'lgbm':
                 lgb_model = cv.best_estimator_
