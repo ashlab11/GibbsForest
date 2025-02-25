@@ -73,6 +73,12 @@ class GibbsForest(RegressorMixin, BaseEstimator):
          self.reg_gamma, self.initial_weight, self.dropout) = check_params(X, self.loss_fn, self.n_trees, self.max_depth, self.min_samples, self.feature_subsample_rf, self.row_subsample_rf, 
          self.feature_subsample_g, self.row_subsample_g, self.warmup_depth, self.leaf_eta, self.tree_eta, self.reg_lambda, 
          self.reg_gamma, self.initial_weight, self.dropout)
+         
+        #TODO: Implement native support for categorical variables and EFB
+        
+        #Convert to numpy arrays
+        X = np.array(X)
+        y = np.array(y)
                  
         self.weights = np.ones(self.n_trees) * 1 / self.n_trees #Initial weights
         self.feature_importances_ = np.zeros(self.n_features_in_)
@@ -80,13 +86,8 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         
         self._trees = []
         self._predictions = np.empty((self.n_trees, len(y)))
-        self.hist_splitter = HistSplitter(X, n_bins=self.n_bins)
+        self.hist_splitter = HistSplitter(X, y, n_bins=self.n_bins) #Hist splitter saves X and utilizes row indices for bin calculations
         
-        X = np.array(X)
-        y = np.array(y)
-        bootstrapped_X = X.copy()
-        bootstrapped_y = y.copy()
-
         #---- INITIAL TREE CREATION, UP TO WARMUP DEPTH ----#     
         #Creating hist splitter class        
         num_rows_considered = max(int(self.row_subsample_rf * len(y)), 1)
@@ -94,14 +95,13 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         for i in range(self.n_trees):    
             rng = np.random.default_rng(seed = None if self.random_state is None else self.random_state + i)
             bootstrapped_idx = rng.choice(len(X), num_rows_considered, replace = True)
-            bootstrapped_X = X[bootstrapped_idx]
-            bootstrapped_y = y[bootstrapped_idx]
+            init = self.loss_fn.argmin(y[bootstrapped_idx])
             
-            tree = Tree(bootstrapped_X, bootstrapped_y, max_depth=self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight, 
+            tree = Tree(init, max_depth=self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight, 
                         loss_fn=self.loss_fn, hist_splitter = self.hist_splitter)
             
             #Initial split -- no current tree-level predictions, and no predictions from any other splits
-            tree.initial_splits(bootstrapped_X, bootstrapped_y, self.warmup_depth, num_features_considered = num_features_considered, 
+            tree.initial_splits(bootstrapped_idx, self.warmup_depth, num_features_considered = num_features_considered, 
                                 rng = rng)
             self._trees.append(tree)
             
@@ -120,10 +120,8 @@ class GibbsForest(RegressorMixin, BaseEstimator):
              
             rng = np.random.default_rng(seed = None if self.random_state is None else self.random_state + idx)
             features_considered = rng.choice(self.n_features_in_, num_features_considered)
-            rows_considered = rng.choice(len(X), num_rows_considered, replace = False)            
-            X_batch = X[rows_considered]
-            y_batch = y[rows_considered]
-            predictions_batch = self._predictions[:, rows_considered]
+            rows_considered = rng.choice(len(X), num_rows_considered, replace = False)   
+            #predictions_batch = self._predictions[:, rows_considered]
                         
             #Going through each tree
             for tree_idx, tree in enumerate(self._trees):
@@ -136,20 +134,19 @@ class GibbsForest(RegressorMixin, BaseEstimator):
                     continue  # skip update, move to the next tree
                 
                 #Getting predictions/weights without chosen tree
-                individual_predictions_without_tree = np.delete(predictions_batch, tree_idx, 0)
+                individual_predictions_without_tree = np.delete(self._predictions, tree_idx, 0)
                 weights_without_tree = np.delete(self.weights, tree_idx)
                 predictions_without_tree = weights_without_tree @ individual_predictions_without_tree
                 
-                
                 #Get best split with these weights
-                error_reduction, best_split = tree.get_best_split(X_batch, y_batch, predictions_without_tree, features_considered, self.weights[tree_idx], 
+                error_reduction, best_split = tree.get_best_split(rows_considered, predictions_without_tree, features_considered, self.weights[tree_idx], 
                                                                   self.leaf_eta)
                 if error_reduction > self.reg_gamma: #Only split if gain is above gamma
-                    tree.split(X, y)
+                    tree.split()
                     
                     #Predictions are based on the entire X, not X_batch, and new_predictions must be updated similarly
                     self._predictions[tree_idx] = tree.predict(X)
-                    predictions_batch[tree_idx] = self._predictions[tree_idx][rows_considered]
+                    #predictions_batch[tree_idx] = self._predictions[tree_idx][rows_considered]
 
                     
                     #Updating feature importances and splits

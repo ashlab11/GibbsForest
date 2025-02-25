@@ -4,40 +4,82 @@ import warnings
 from numba import njit
 
 class HistSplitter:
-    def __init__(self, X, n_bins = 256):
+    """
+    Splitting class that utilizes global-esque variables to help in splitting
+    
+    @params: X: ndarray, shape (n_samples, n_features)
+    
+    @params: y: ndarray, shape (n_samples,)
+    
+    @params: n_bins: int, number of bins to use for histogram
+            
+    Values: 
+    
+    n_vals: int, number of samples
+    
+    n_features: int, number of features
+    
+    n_unique: list of int, number of unique values in each feature
+    
+    actual_bin_num: list of int, number of bins to use for each feature
+    
+    bins: list of ndarray, the bins for each feature
+    
+    bin_indices_for_col: list of ndarray, the bin indices for each feature
+    """
+    
+    def __init__(self, X, y, n_bins = 256):
         """Splitting class that utilizes global-esque variables to help in splitting"""
+        self.X = X
+        self.y = y
+        self.missing_idxs = np.isnan(X)
         self.n_vals = X.shape[0]
+        self.n_features = X.shape[1]
         self.n_unique = [len(np.unique(X[:, i])) for i in range(X.shape[1])]
         self.actual_bin_num = np.minimum(self.n_unique, n_bins)
         self.bins = [np.linspace(np.min(X[:, i]), np.max(X[:, i]), self.actual_bin_num[i]) for i in range(X.shape[1])]
-        self.bin_indices_for_col = [np.digitize(X[:, i], self.bins[i], right=True) for i in range(X.shape[1])]
-
-
+        self.bin_indices_for_col = np.array([np.digitize(X[:, i], self.bins[i], right=True) for i in range(X.shape[1])]).T
+    
+    def split(self, row_idxs, col_idx, split_val, missing_goes_left):
+        """Function that splits the data given a column and a splitting value"""
+        X = self.X[row_idxs]
+        
+        if missing_goes_left:
+            left_idx = np.isnan(X[:, col_idx]) | (X[:, col_idx] <= split_val)
+            right_idx = ~left_idx
+        else:
+            right_idx = np.isnan(X[:, col_idx]) | (X[:, col_idx] > split_val)
+            left_idx = ~right_idx
+        
+        #We want indices to be numeric, not boolean
+        left_idx = row_idxs[left_idx]
+        right_idx = row_idxs[right_idx]
+        return left_idx, right_idx
+    
     @profile
-    def find_split_hist_col_sparsity(self, X_col, col_idx, g_i, h_i, init, tree_weight, reg_lambda,
-                            min_samples = 2, eps = 1e-6, n_bins = 256):
+    def find_split_hist_col_sparsity(self, col_idx, row_idx, g_i, h_i, init, tree_weight, reg_lambda,
+                            min_samples = 2, eps = 1e-6):
         """Splitting a single column of X, using histogram splitting for computational efficiency"""
         if self.n_unique[col_idx] == 1:
             # Can't split on a single unique value
             return (-np.inf, None, False)
-        
+                
         bins = self.bins[col_idx]
                 
         # Separate out missing vs non-missing
-        missing_mask = np.isnan(X_col)
+        missing_mask = self.missing_idxs[row_idx, col_idx] #Boolean mask
 
         # Values for non-missing
-        X_col_non_missing = X_col[~missing_mask]
         g_i_non_missing = g_i[~missing_mask]
         h_i_non_missing = h_i[~missing_mask]
         n_missing = np.sum(missing_mask)
 
         # If everything is missing or everything is non-missing with < 2*min_samples, skip
-        if len(X_col_non_missing) < min_samples or len(X_col_non_missing) < min_samples:
+        if len(g_i_non_missing) < min_samples:
             # It effectively can't split
             return (-np.inf, None, False)
         
-        bin_indices = np.digitize(X_col_non_missing, bins, right=True) #right = 1 guarantees left inclusive, so <=
+        bin_indices = self.bin_indices_for_col[row_idx, col_idx][~missing_mask]
         G = np.bincount(bin_indices, weights=g_i_non_missing)
         H = np.bincount(bin_indices, weights=h_i_non_missing)
         counts = np.bincount(bin_indices)
@@ -101,8 +143,8 @@ class HistSplitter:
                 
         return (best_gain, best_split, missing_goes_left)
             
-    def find_split_hist(self, X, y, other_predictions, leaf_weight, tree_weight, features_to_consider, loss_fn,
-                        min_samples = 2, eta = 0.1, reg_lambda = 0, initial_weight = 'parent', eps = 1e-6, n_bins = 256):
+    def find_split_hist(self, row_idxs, other_predictions, leaf_weight, tree_weight, features_to_consider, loss_fn,
+                        min_samples = 2, eta = 0.1, reg_lambda = 0, initial_weight = 'parent', eps = 1e-6):
         """A generic second-order-split approach a la GBM, 
         for any twice-differentiable 'loss_fn'. Uses histogram splitting for computational efficiency.
 
@@ -124,21 +166,25 @@ class HistSplitter:
             Minimum #samples required in each child for a valid split.
         eta : float
             Learning rate scaling factor.
-            reg_lambda : float
-                L2 regularization.
-            initial_weight : 'parent' or 'argmin'
-                Whether each child is built around the parent's weight or 
-                we reset each child to local argmin of that child’s y. 
-            eps : float
-                Small offset to avoid dividing by zero in Hessians.
-            Returns
-            -------
-            best_gain : float
-            best_col : int
-            best_split_val : float
-            left_child_weight : float
-            right_child_weight : float"""
-        if len(X) < 2 * min_samples:
+        reg_lambda : float
+            L2 regularization.
+        initial_weight : 'parent' or 'argmin'
+            Whether each child is built around the parent's weight or 
+            we reset each child to local argmin of that child’s y. 
+        eps : float
+            Small offset to avoid dividing by zero in Hessians.
+        Returns
+        -------
+        best_gain : float
+        best_col : int
+        best_split_val : float
+        left_child_weight : float
+        right_child_weight : float"""
+
+        X = self.X[row_idxs]
+        y = self.y[row_idxs]
+        
+        if len(row_idxs) < 2 * min_samples:
             return (-np.inf, None, None, None, None, True)
         
         best_gain = -np.inf
@@ -163,14 +209,12 @@ class HistSplitter:
         h_i = loss_fn.hessian(y, previous_predictions)
         
         # -- MAIN LOOP OVER FEATURES -- #
-        for col in features_to_consider:
-            X_col = X[:, col]
-            
-            col_gain, col_split, col_missing_goes_left = self.find_split_hist_col_sparsity(X_col, col, g_i, h_i, init, tree_weight, reg_lambda,
-                            min_samples = min_samples, eps = eps, n_bins = n_bins)
+        for col_idx in features_to_consider:            
+            col_gain, col_split, col_missing_goes_left = self.find_split_hist_col_sparsity(col_idx, row_idxs, g_i, h_i, init, tree_weight, reg_lambda,
+                            min_samples = min_samples, eps = eps)
             if col_gain > best_gain:
                 best_gain = col_gain
-                curr_best_col = col
+                curr_best_col = col_idx
                 curr_best_splitting_val = col_split
                 missing_goes_left = col_missing_goes_left
         
