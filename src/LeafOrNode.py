@@ -5,8 +5,8 @@ from .Losses import *
 import time
 
 class LeafOrNode:
-    def __init__(self, val, curr_depth = 0, max_depth = 3, min_samples = 2, initial_weight = 'parent', 
-                 loss_fn = LeastSquaresLoss(), hist_splitter = None):
+    def __init__(self, val, hist_splitter : HistSplitter, curr_depth = 0, max_depth = 3, min_samples = 2, initial_weight = 'parent', 
+                 loss_fn = LeastSquaresLoss()):
         #Values given from the tree
         self.max_depth = max_depth
         self.min_samples = min_samples
@@ -25,33 +25,28 @@ class LeafOrNode:
         self.next_to_split = None
      
          
-    def get_best_split(self, X, y, other_predictions, features_considered, tree_weight, eta):
+    def get_best_split(self, row_idxs, other_predictions, features_considered, tree_weight, eta):
         """Function that gets the best split for a node or leaf, but doesn't split it yet
         Note: new_tree is a boolean that tells us whether we are splitting a new tree or not, 
         which is necessary for error calculations. 
         Returns the best error reduction and the column to split on"""
-        if self.curr_depth == self.max_depth or len(y) <= self.min_samples:
+        if self.curr_depth == self.max_depth or len(row_idxs) <= self.min_samples:
             return (0, -1) #No error reduction possible
         if self.left == None and self.right == None:
-            return self.get_best_split_leaf(X, y, other_predictions, features_considered, tree_weight, eta)
+            return self.get_best_split_leaf(row_idxs, other_predictions, features_considered, tree_weight, eta)
         else:
-            return self.get_best_split_node(X, y, other_predictions, features_considered, tree_weight, eta)
+            return self.get_best_split_node(row_idxs, other_predictions, features_considered, tree_weight, eta)
         
-    def get_best_split_node(self, X, y, other_predictions, features_considered, tree_weight, eta):
+    def get_best_split_node(self, row_idxs, other_predictions, features_considered, tree_weight, eta):
         """Function that gets the best split for a node, but doesn't split it yet"""
-        left_indices = X[:, self.curr_best_col] <= self.curr_best_splitting_val
-        right_indices = ~left_indices
         
-        left_X = X[left_indices]
-        right_X = X[right_indices]
+        left_idxs, right_idxs = self.hist_splitter.split(row_idxs, self.curr_best_col, self.curr_best_splitting_val, self.missing_goes_left)
 
-        left_other_predictions = other_predictions[left_indices]
-        right_other_predictions = other_predictions[right_indices]
-        left_y = y[left_indices]
-        right_y = y[right_indices]
+        #left_other_predictions = other_predictions[left_idxs]
+        #right_other_predictions = other_predictions[right_idxs]
                 
-        left_best_error_reduction, left_col_split = self.left.get_best_split(left_X, left_y, left_other_predictions, features_considered, tree_weight, eta)
-        right_best_error_reduction, right_col_split = self.right.get_best_split(right_X, right_y, right_other_predictions, features_considered, tree_weight, eta)
+        left_best_error_reduction, left_col_split = self.left.get_best_split(left_idxs, other_predictions, features_considered, tree_weight, eta)
+        right_best_error_reduction, right_col_split = self.right.get_best_split(right_idxs, other_predictions, features_considered, tree_weight, eta)
         
         if left_best_error_reduction > right_best_error_reduction:
             self.curr_best_error_reduction = left_best_error_reduction
@@ -62,34 +57,25 @@ class LeafOrNode:
             self.next_to_split = self.right
             return right_best_error_reduction, right_col_split
 
-    def get_best_split_leaf(self, X, y, other_predictions, features_considered, tree_weight, eta):
+    def get_best_split_leaf(self, row_idxs, other_predictions, features_considered, tree_weight, eta):
         """Function that gets the best split for a leaf, but doesn't split it yet."""
         if np.isnan(other_predictions).any():
             print("NAN in other_predictions")
+        other_predictions_considered = other_predictions[row_idxs]
         
-        """old_start = time.time()
-        gain, col, splitting_val, left_val, right_val = find_split(
-            X, y, other_predictions, self.val, tree_weight, features_to_consider=features_considered, min_samples=self.min_samples,
-            eta = eta, loss_fn=self.loss_fn, initial_weight = self.initial_weight)
-        
-        time_old = time.time() - old_start
-        #Testing new splitting method
-        """
-        new_start = time.time() 
-        gain, col, splitting_val, left_val, right_val, missing_goes_left = self.hist_splitter.find_split_hist(X, y, other_predictions, self.val, tree_weight, features_to_consider=features_considered, 
+        gain, col, splitting_val, left_val, right_val, missing_goes_left = self.hist_splitter.find_split_hist(row_idxs, other_predictions_considered, self.val, tree_weight, features_to_consider=features_considered, 
                                                                                             min_samples=self.min_samples, eta = eta, loss_fn=self.loss_fn, 
                                                                                             initial_weight = self.initial_weight)
-        time_new = time.time() - new_start
-        #print("New speedup: ", time_old / time_new)
         
         self.curr_best_col = col
         self.curr_best_splitting_val = splitting_val
         self.left_val = left_val
         self.right_val = right_val
+        self.missing_goes_left = missing_goes_left
             
         return gain, self.curr_best_col
     
-    def initial_split(self, X, y, warmup_depth, features_considered):
+    def initial_split(self, row_idxs, warmup_depth, features_considered):
         """Function that does the initial splits, up to a warmup depth
         NOTE: Setting initial weight = parent and eta = 1 is equivalent to using argmin with 0 eta for initial splits.
         I chose to use the former for theoretical simplicity, but the latter is equally efficient.
@@ -98,7 +84,7 @@ class LeafOrNode:
         left_splits = 0
         right_splits = 0
         if self.curr_depth < warmup_depth:
-            gain, col, splitting_val, left_val, right_val = find_split(X, y, other_predictions= np.zeros(len(y)), leaf_weight = self.val, tree_weight=1, features_to_consider = features_considered, min_samples=self.min_samples,
+            gain, col, splitting_val, left_val, right_val, missing_goes_left = self.hist_splitter.find_split_hist(row_idxs, other_predictions= np.zeros_like(row_idxs), leaf_weight = self.val, tree_weight=1, features_to_consider = features_considered, min_samples=self.min_samples,
                     eta = 1, loss_fn=self.loss_fn, initial_weight = "parent")
                         
             if splitting_val is None:
@@ -109,17 +95,18 @@ class LeafOrNode:
             self.curr_best_splitting_val = splitting_val
             self.left_val = left_val
             self.right_val = right_val
-            self.split(X, y)
+            self.missing_goes_left = missing_goes_left
+            self.split()
+            left_idxs, right_idxs = self.hist_splitter.split(row_idxs, col, splitting_val, missing_goes_left)
+            
             splits += 1
             
-            left_indices = X[:, self.curr_best_col] <= self.curr_best_splitting_val
-            right_indices = ~left_indices
-            left_splits = self.left.initial_split(X[left_indices], y[left_indices], warmup_depth, features_considered)
-            right_splits = self.right.initial_split(X[right_indices], y[right_indices], warmup_depth, features_considered) 
+            left_splits = self.left.initial_split(left_idxs, warmup_depth, features_considered)
+            right_splits = self.right.initial_split(right_idxs, warmup_depth, features_considered) 
             
         return splits + left_splits + right_splits
     
-    def split(self, X, y):
+    def split(self):
         """Function that ACTUALLY splits the node, given information we created when testing splits"""
         if self.curr_best_error_reduction == 0:
             #Should never happen, since we just don't split in the first place
@@ -131,15 +118,9 @@ class LeafOrNode:
             else:
                 #Splitting the node for real!
                 if self.next_to_split == self.left:
-                    left_idx = X[:, self.curr_best_col] <= self.curr_best_splitting_val
-                    left_X = X[left_idx]
-                    left_y = y[left_idx]
-                    self.left.split(left_X, left_y)
+                    self.left.split()
                 else:
-                    right_idx = X[:, self.curr_best_col] > self.curr_best_splitting_val
-                    right_X = X[right_idx]
-                    right_y = y[right_idx]
-                    self.right.split(right_X, right_y)
+                    self.right.split()
                 
     def split_leaf(self):
         self.left = LeafOrNode(self.left_val, curr_depth= self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight, loss_fn = self.loss_fn, hist_splitter=self.hist_splitter)
