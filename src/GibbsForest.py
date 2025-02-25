@@ -112,7 +112,12 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         num_features_considered = max(int(self.n_features_in_ * self.feature_subsample_g), 1)
         num_rows_considered = max(int(self.row_subsample_g * len(y)), 1)
         #Round-robin -- with max_depth = N and initial depth D, we should have 2^N - 2^D splits
-        for idx in range(2**self.max_depth - 2**self.warmup_depth):
+        
+        for idx in range(min(10000, 2**self.max_depth - 2**self.warmup_depth)):
+            num_leaves_per_tree = [tree.num_leaves for tree in self._trees]
+            if np.all(np.array(num_leaves_per_tree) >= self.max_leaves):
+                break #All trees have reached max leaves
+             
             rng = np.random.default_rng(seed = None if self.random_state is None else self.random_state + idx)
             features_considered = rng.choice(self.n_features_in_, num_features_considered)
             rows_considered = rng.choice(len(X), num_rows_considered, replace = False)            
@@ -122,7 +127,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
                         
             #Going through each tree
             for tree_idx, tree in enumerate(self._trees):
-                if tree.num_leaves >= self.max_leaves:
+                if num_leaves_per_tree[tree_idx] >= self.max_leaves:
                     continue
                 
                 rng = np.random.default_rng(seed = None if self.random_state is None else self.random_state + tree_idx)
