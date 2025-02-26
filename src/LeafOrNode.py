@@ -3,6 +3,7 @@ from .hist_splitting import HistSplitter
 from .scan_thresholds import get_best_sse, find_split
 from .Losses import *
 import time
+from line_profiler import profile
 
 class LeafOrNode:
     def __init__(self, val, hist_splitter : HistSplitter, curr_depth = 0, max_depth = 3, min_samples = 2, initial_weight = 'parent', 
@@ -36,7 +37,7 @@ class LeafOrNode:
             return self.get_best_split_leaf(row_idxs, other_predictions, features_considered, tree_weight, eta)
         else:
             return self.get_best_split_node(row_idxs, other_predictions, features_considered, tree_weight, eta)
-        
+    
     def get_best_split_node(self, row_idxs, other_predictions, features_considered, tree_weight, eta):
         """Function that gets the best split for a node, but doesn't split it yet"""
         
@@ -56,7 +57,7 @@ class LeafOrNode:
             self.curr_best_error_reduction = right_best_error_reduction
             self.next_to_split = self.right
             return right_best_error_reduction, right_col_split
-
+    @profile
     def get_best_split_leaf(self, row_idxs, other_predictions, features_considered, tree_weight, eta):
         """Function that gets the best split for a leaf, but doesn't split it yet."""
         if np.isnan(other_predictions).any():

@@ -40,15 +40,16 @@ class HistSplitter:
         self.bins = [np.linspace(np.min(X[:, i]), np.max(X[:, i]), self.actual_bin_num[i]) for i in range(X.shape[1])]
         self.bin_indices_for_col = np.array([np.digitize(X[:, i], self.bins[i], right=True) for i in range(X.shape[1])]).T
     
+    @profile
     def split(self, row_idxs, col_idx, split_val, missing_goes_left):
         """Function that splits the data given a column and a splitting value"""
-        X = self.X[row_idxs]
+        X_col = self.X[row_idxs, col_idx]
         
         if missing_goes_left:
-            left_idx = np.isnan(X[:, col_idx]) | (X[:, col_idx] <= split_val)
+            left_idx = np.isnan(X_col) | (X_col <= split_val)
             right_idx = ~left_idx
         else:
-            right_idx = np.isnan(X[:, col_idx]) | (X[:, col_idx] > split_val)
+            right_idx = np.isnan(X_col) | (X_col > split_val)
             left_idx = ~right_idx
         
         #We want indices to be numeric, not boolean

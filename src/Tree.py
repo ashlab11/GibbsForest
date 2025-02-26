@@ -1,6 +1,7 @@
 from .Losses import *
 from .LeafOrNode import LeafOrNode
 import random
+from line_profiler import profile
         
 class Tree:
     def __init__(self, init, min_samples = 2, max_depth = 3,
@@ -18,6 +19,7 @@ class Tree:
         features_considered = rng.choice(self.hist_splitter.n_features, num_features_considered, replace = False)
         num_leaves = self.root.initial_split(row_idxs, warmup_depth, features_considered)
         self.num_leaves += num_leaves
+    @profile
     def get_best_split(self, row_idxs, other_predictions, features_considered, tree_weight, eta):
         return self.root.get_best_split(row_idxs, other_predictions, features_considered, tree_weight, eta) 
     def split(self):
