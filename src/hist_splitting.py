@@ -44,9 +44,10 @@ class HistSplitter:
     def split(self, row_idxs, col_idx, split_val, missing_goes_left):
         """Function that splits the data given a column and a splitting value"""
         X_col = self.X[row_idxs, col_idx]
+        #missing_idxs = self.missing_idxs[row_idxs, col_idx]
         
         if missing_goes_left:
-            left_idx = np.isnan(X_col) | (X_col <= split_val)
+            left_idx = np.isnan(X_col) | np.less_equal(X_col <= split_val)
             right_idx = ~left_idx
         else:
             right_idx = np.isnan(X_col) | (X_col > split_val)

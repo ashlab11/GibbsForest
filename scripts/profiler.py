@@ -10,6 +10,7 @@ import line_profiler as profile
 import os
 import matplotlib.pyplot as plt
 import numpy as np
+import time
 
 os.environ['LINE_PROFILE'] = "1"
 

@@ -18,6 +18,7 @@ class LeafOrNode:
         self.hist_splitter = hist_splitter
 
         #Values calculated by splits
+        self.rows_considered = None
         self.left = None
         self.right = None
         self.curr_best_col = None

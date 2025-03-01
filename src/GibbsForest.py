@@ -121,6 +121,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
                 break #All trees have reached max leaves
              
             rng = np.random.default_rng(seed = None if self.random_state is None else self.random_state + idx)
+            dropout_vals = rng.random(self.n_trees)
             features_considered = rng.choice(self.n_features_in_, num_features_considered)
             rows_considered = rng.choice(len(X), num_rows_considered, replace = False)   
             current_predictions = self.weights @ self._predictions
@@ -128,10 +129,8 @@ class GibbsForest(RegressorMixin, BaseEstimator):
             for tree_idx, tree in enumerate(self._trees):
                 if num_leaves_per_tree[tree_idx] >= self.max_leaves:
                     continue
-                
-                rng = np.random.default_rng(seed = None if self.random_state is None else self.random_state + tree_idx)
-                # ---- Dropout condition: skip updating this tree with probability self.dropout ----
-                if rng.random() < self.dropout:
+                                # ---- Dropout condition: skip updating this tree with probability self.dropout ----
+                if dropout_vals[tree_idx] < self.dropout:
                     continue  # skip update, move to the next tree
                 
                 #Getting predictions/weights without chosen tree
