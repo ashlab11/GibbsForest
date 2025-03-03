@@ -137,15 +137,14 @@ class GibbsForest(RegressorMixin, BaseEstimator):
                 predictions_without_tree = current_predictions - self.weights[tree_idx] * self._predictions[tree_idx] 
                 
                 #Get best split with these weights
-                error_reduction, best_split = tree.get_best_split(rows_considered, predictions_without_tree, features_considered, self.weights[tree_idx], 
-                                                                  self.leaf_eta)
+                error_reduction, best_split = tree.get_best_split(rows_considered, predictions_without_tree, features_considered, self.weights[tree_idx], self.leaf_eta)
                 if error_reduction > self.reg_gamma: #Only split if gain is above gamma
-                    tree.split()
-                    
                     #Predictions are based on the entire X, not X_batch, and new_predictions must be updated similarly
-                    predictions = tree.predict(X)
-                    self._predictions[tree_idx] = predictions
-                    current_predictions = predictions_without_tree + self.weights[tree_idx] * predictions
+                    left_idx, right_idx, left_val, right_val = tree.split()
+                    
+                    self._predictions[tree_idx][left_idx] = left_val
+                    self._predictions[tree_idx][right_idx] = right_val
+                    current_predictions = predictions_without_tree + self.weights[tree_idx] * self._predictions[tree_idx]
                     
                     #Updating feature importances and splits
                     self.feature_importances_[best_split] += error_reduction
@@ -173,7 +172,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
             self.weights += self.tree_eta * weight_update
             
             #Updating weights, removing trees below 0
-            below_0_idx = np.where(self.weights < 0)
+            below_0_idx = np.where(self.weights <= 1e-6)
             self.weights = np.delete(self.weights, below_0_idx)
             self._predictions = np.delete(self._predictions, below_0_idx, 0)
             self._trees = np.delete(self._trees, below_0_idx)
