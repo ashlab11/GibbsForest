@@ -37,7 +37,7 @@ class HistSplitter:
         self.n_features = X.shape[1]
         self.n_unique = [len(np.unique(X[:, i])) for i in range(X.shape[1])]
         self.actual_bin_num = np.minimum(self.n_unique, n_bins) - 1 #Only n - 1 bins are needed
-        self.bins = [np.linspace(np.min(X[:, i]), np.max(X[:, i]), self.actual_bin_num[i]) for i in range(X.shape[1])]
+        self.bins = [np.quantile(X[:, i], np.linspace(0, 1, self.actual_bin_num[i])) for i in range(X.shape[1])]
         self.bin_indices_for_col = np.array([np.digitize(X[:, i], self.bins[i], right=True) for i in range(X.shape[1])]).T
     
     @profile
