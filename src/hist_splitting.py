@@ -36,7 +36,7 @@ class HistSplitter:
         self.n_vals = X.shape[0]
         self.n_features = X.shape[1]
         self.n_unique = [len(np.unique(X[:, i])) for i in range(X.shape[1])]
-        self.actual_bin_num = np.minimum(self.n_unique, n_bins)
+        self.actual_bin_num = np.minimum(self.n_unique, n_bins) - 1 #Only n - 1 bins are needed
         self.bins = [np.linspace(np.min(X[:, i]), np.max(X[:, i]), self.actual_bin_num[i]) for i in range(X.shape[1])]
         self.bin_indices_for_col = np.array([np.digitize(X[:, i], self.bins[i], right=True) for i in range(X.shape[1])]).T
     
@@ -234,11 +234,7 @@ class HistSplitter:
         
         left_delta = - (tree_weight * np.sum(g_i[left_idx]) + init * reg_lambda) / (tree_weight**2 * np.sum(h_i[left_idx]) + reg_lambda)
         right_delta = - (tree_weight * np.sum(g_i[right_idx]) + init * reg_lambda) / (tree_weight**2 * np.sum(h_i[right_idx]) + reg_lambda)
-        if np.any(np.isnan(right_delta)):
-            print("TREE WEIGHT: ", tree_weight)
-            print("G: ", g_i[right_idx])
-            print("H: ", h_i[right_idx])
-            print("REG LAMBDA: ", reg_lambda)
+ 
         
         """If we're using argmin, we optimize starting with the argmin of the left and right sides. 
                 Otherwise we use the parent weight for the init vals"""

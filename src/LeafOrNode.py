@@ -44,9 +44,6 @@ class LeafOrNode:
         """Function that gets the best split for a node, but doesn't split it yet"""
         
         left_idxs, right_idxs = self.hist_splitter.split(row_idxs, self.curr_best_col, self.curr_best_splitting_val, self.missing_goes_left)
-
-        #left_other_predictions = other_predictions[left_idxs]
-        #right_other_predictions = other_predictions[right_idxs]
                 
         left_best_error_reduction, left_col_split = self.left.get_best_split(left_idxs, other_predictions, features_considered, tree_weight, eta)
         right_best_error_reduction, right_col_split = self.right.get_best_split(right_idxs, other_predictions, features_considered, tree_weight, eta)
