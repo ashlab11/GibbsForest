@@ -10,6 +10,7 @@ import line_profiler as profile
 import os
 import matplotlib.pyplot as plt
 import numpy as np
+import time
 
 os.environ['LINE_PROFILE'] = "1"
 
@@ -31,7 +32,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error
 from src import Losses
 
-task_id = small_tasks_ids[0]
+task_id = small_tasks_ids[2]
+print(task_id)
 task = openml.tasks.get_task(task_id)
 X, y = task.get_X_and_y()
 X, y = fetch_california_housing(return_X_y = True)
@@ -49,7 +51,7 @@ gibbs_params = {"leaf_eta": 0.2,
             'tree_eta': 0.05, 
             'feature_subsample_rf': 'sqrt',
             'row_subsample_rf': 0.5,
-            'feature_subsample_g': 0.3, 
+            'feature_subsample_g': 0.5, 
             'row_subsample_g': 1, 
             'random_state': 42}
 

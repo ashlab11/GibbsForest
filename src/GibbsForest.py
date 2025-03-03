@@ -1,5 +1,6 @@
 import numpy as np
 import random
+from line_profiler import profile
 from .Tree import Tree
 from .Losses import *
 from .LeafOrNode import LeafOrNode
@@ -63,6 +64,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
         self.random_state = random_state
         self.n_bins = n_bins
     
+    @profile
     def fit(self, X, y):
         X, y = check_X_y(X, y, accept_sparse=False)
         self.n_features_in_ = X.shape[1]  # for sklearn compliance
@@ -119,35 +121,30 @@ class GibbsForest(RegressorMixin, BaseEstimator):
                 break #All trees have reached max leaves
              
             rng = np.random.default_rng(seed = None if self.random_state is None else self.random_state + idx)
+            dropout_vals = rng.random(self.n_trees)
             features_considered = rng.choice(self.n_features_in_, num_features_considered)
             rows_considered = rng.choice(len(X), num_rows_considered, replace = False)   
-            #predictions_batch = self._predictions[:, rows_considered]
-                        
+            current_predictions = self.weights @ self._predictions
             #Going through each tree
             for tree_idx, tree in enumerate(self._trees):
                 if num_leaves_per_tree[tree_idx] >= self.max_leaves:
                     continue
-                
-                rng = np.random.default_rng(seed = None if self.random_state is None else self.random_state + tree_idx)
-                # ---- Dropout condition: skip updating this tree with probability self.dropout ----
-                if rng.random() < self.dropout:
+                                # ---- Dropout condition: skip updating this tree with probability self.dropout ----
+                if dropout_vals[tree_idx] < self.dropout:
                     continue  # skip update, move to the next tree
                 
                 #Getting predictions/weights without chosen tree
-                individual_predictions_without_tree = np.delete(self._predictions, tree_idx, 0)
-                weights_without_tree = np.delete(self.weights, tree_idx)
-                predictions_without_tree = weights_without_tree @ individual_predictions_without_tree
+                predictions_without_tree = current_predictions - self.weights[tree_idx] * self._predictions[tree_idx] 
                 
                 #Get best split with these weights
-                error_reduction, best_split = tree.get_best_split(rows_considered, predictions_without_tree, features_considered, self.weights[tree_idx], 
-                                                                  self.leaf_eta)
+                error_reduction, best_split = tree.get_best_split(rows_considered, predictions_without_tree, features_considered, self.weights[tree_idx], self.leaf_eta)
                 if error_reduction > self.reg_gamma: #Only split if gain is above gamma
-                    tree.split()
-                    
                     #Predictions are based on the entire X, not X_batch, and new_predictions must be updated similarly
-                    self._predictions[tree_idx] = tree.predict(X)
-                    #predictions_batch[tree_idx] = self._predictions[tree_idx][rows_considered]
-
+                    left_idx, right_idx, left_val, right_val = tree.split()
+                    
+                    self._predictions[tree_idx][left_idx] = left_val
+                    self._predictions[tree_idx][right_idx] = right_val
+                    current_predictions = predictions_without_tree + self.weights[tree_idx] * self._predictions[tree_idx]
                     
                     #Updating feature importances and splits
                     self.feature_importances_[best_split] += error_reduction
@@ -156,9 +153,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
             if idx < 2: #Don't change tree weights for a little while
                 continue
             
-            #--- UPDATING TREE WEIGHTS ---#
-            current_predictions = self.weights @ self._predictions
-            
+            #--- UPDATING TREE WEIGHTS ---#            
             pred_gradients = self.loss_fn.gradient(y, current_predictions)
             pred_gradients = pred_gradients.reshape(-1, 1)
             gradients = self._predictions @ pred_gradients
@@ -177,7 +172,7 @@ class GibbsForest(RegressorMixin, BaseEstimator):
             self.weights += self.tree_eta * weight_update
             
             #Updating weights, removing trees below 0
-            below_0_idx = np.where(self.weights < 0)
+            below_0_idx = np.where(self.weights <= 1e-6)
             self.weights = np.delete(self.weights, below_0_idx)
             self._predictions = np.delete(self._predictions, below_0_idx, 0)
             self._trees = np.delete(self._trees, below_0_idx)

@@ -3,11 +3,12 @@ from .hist_splitting import HistSplitter
 from .scan_thresholds import get_best_sse, find_split
 from .Losses import *
 import time
+from line_profiler import profile
 
 class LeafOrNode:
-    def __init__(self, val, hist_splitter : HistSplitter, curr_depth = 0, max_depth = 3, min_samples = 2, initial_weight = 'parent', 
+    def __init__(self, val, rows_considered, hist_splitter : HistSplitter, curr_depth = 0, max_depth = 3, min_samples = 2, initial_weight = 'parent', 
                  loss_fn = LeastSquaresLoss()):
-        #Values given from the tree
+        #Values given from the parent or tree
         self.max_depth = max_depth
         self.min_samples = min_samples
         self.curr_depth = curr_depth
@@ -15,6 +16,7 @@ class LeafOrNode:
         self.initial_weight = initial_weight
         self.loss_fn = loss_fn
         self.hist_splitter = hist_splitter
+        self.rows_considered = rows_considered
 
         #Values calculated by splits
         self.left = None
@@ -36,14 +38,12 @@ class LeafOrNode:
             return self.get_best_split_leaf(row_idxs, other_predictions, features_considered, tree_weight, eta)
         else:
             return self.get_best_split_node(row_idxs, other_predictions, features_considered, tree_weight, eta)
-        
+    
+    @profile
     def get_best_split_node(self, row_idxs, other_predictions, features_considered, tree_weight, eta):
         """Function that gets the best split for a node, but doesn't split it yet"""
         
         left_idxs, right_idxs = self.hist_splitter.split(row_idxs, self.curr_best_col, self.curr_best_splitting_val, self.missing_goes_left)
-
-        #left_other_predictions = other_predictions[left_idxs]
-        #right_other_predictions = other_predictions[right_idxs]
                 
         left_best_error_reduction, left_col_split = self.left.get_best_split(left_idxs, other_predictions, features_considered, tree_weight, eta)
         right_best_error_reduction, right_col_split = self.right.get_best_split(right_idxs, other_predictions, features_considered, tree_weight, eta)
@@ -56,11 +56,9 @@ class LeafOrNode:
             self.curr_best_error_reduction = right_best_error_reduction
             self.next_to_split = self.right
             return right_best_error_reduction, right_col_split
-
+    @profile
     def get_best_split_leaf(self, row_idxs, other_predictions, features_considered, tree_weight, eta):
         """Function that gets the best split for a leaf, but doesn't split it yet."""
-        if np.isnan(other_predictions).any():
-            print("NAN in other_predictions")
         other_predictions_considered = other_predictions[row_idxs]
         
         gain, col, splitting_val, left_val, right_val, missing_goes_left = self.hist_splitter.find_split_hist(row_idxs, other_predictions_considered, self.val, tree_weight, features_to_consider=features_considered, 
@@ -114,18 +112,20 @@ class LeafOrNode:
         else:
             if self.next_to_split == None:
                 #Creating a leaf, keeping idxs for future use
-                self.split_leaf()
+                return self.split_leaf()
             else:
                 #Splitting the node for real!
                 if self.next_to_split == self.left:
-                    self.left.split()
+                    return self.left.split()
                 else:
-                    self.right.split()
+                    return self.right.split()
                 
     def split_leaf(self):
-        self.left = LeafOrNode(self.left_val, curr_depth= self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight, loss_fn = self.loss_fn, hist_splitter=self.hist_splitter)
-        self.right = LeafOrNode(self.right_val, curr_depth = self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight, loss_fn = self.loss_fn, hist_splitter=self.hist_splitter)
-        return None
+        left_considered, right_considered = self.hist_splitter.split(self.rows_considered, self.curr_best_col, self.curr_best_splitting_val, self.missing_goes_left)
+        
+        self.left = LeafOrNode(self.left_val, rows_considered = left_considered, curr_depth= self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight, loss_fn = self.loss_fn, hist_splitter=self.hist_splitter)
+        self.right = LeafOrNode(self.right_val, rows_considered = right_considered, curr_depth = self.curr_depth + 1, max_depth = self.max_depth, min_samples = self.min_samples, initial_weight = self.initial_weight, loss_fn = self.loss_fn, hist_splitter=self.hist_splitter)
+        return left_considered, right_considered, self.left_val, self.right_val
      
     def predict(self, X_predict = None):
         """Function that predicts the values for a given X_predict. If conducted in training mode, we can set new predictions"""

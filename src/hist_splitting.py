@@ -36,19 +36,21 @@ class HistSplitter:
         self.n_vals = X.shape[0]
         self.n_features = X.shape[1]
         self.n_unique = [len(np.unique(X[:, i])) for i in range(X.shape[1])]
-        self.actual_bin_num = np.minimum(self.n_unique, n_bins)
-        self.bins = [np.linspace(np.min(X[:, i]), np.max(X[:, i]), self.actual_bin_num[i]) for i in range(X.shape[1])]
+        self.actual_bin_num = np.minimum(self.n_unique, n_bins) - 1 #Only n - 1 bins are needed
+        self.bins = [np.quantile(X[:, i], np.linspace(0, 1, self.actual_bin_num[i])) for i in range(X.shape[1])]
         self.bin_indices_for_col = np.array([np.digitize(X[:, i], self.bins[i], right=True) for i in range(X.shape[1])]).T
     
+    @profile
     def split(self, row_idxs, col_idx, split_val, missing_goes_left):
         """Function that splits the data given a column and a splitting value"""
-        X = self.X[row_idxs]
+        X_col = self.X[row_idxs, col_idx]
+        #missing_idxs = self.missing_idxs[row_idxs, col_idx]
         
         if missing_goes_left:
-            left_idx = np.isnan(X[:, col_idx]) | (X[:, col_idx] <= split_val)
+            left_idx = np.isnan(X_col) | (X_col <= split_val)
             right_idx = ~left_idx
         else:
-            right_idx = np.isnan(X[:, col_idx]) | (X[:, col_idx] > split_val)
+            right_idx = np.isnan(X_col) | (X_col > split_val)
             left_idx = ~right_idx
         
         #We want indices to be numeric, not boolean
@@ -142,7 +144,8 @@ class HistSplitter:
                 missing_goes_left = False
                 
         return (best_gain, best_split, missing_goes_left)
-            
+    
+    @profile
     def find_split_hist(self, row_idxs, other_predictions, leaf_weight, tree_weight, features_to_consider, loss_fn,
                         min_samples = 2, eta = 0.1, reg_lambda = 0, initial_weight = 'parent', eps = 1e-6):
         """A generic second-order-split approach a la GBM, 
@@ -231,6 +234,7 @@ class HistSplitter:
         
         left_delta = - (tree_weight * np.sum(g_i[left_idx]) + init * reg_lambda) / (tree_weight**2 * np.sum(h_i[left_idx]) + reg_lambda)
         right_delta = - (tree_weight * np.sum(g_i[right_idx]) + init * reg_lambda) / (tree_weight**2 * np.sum(h_i[right_idx]) + reg_lambda)
+ 
         
         """If we're using argmin, we optimize starting with the argmin of the left and right sides. 
                 Otherwise we use the parent weight for the init vals"""
