@@ -1,12 +1,3 @@
-# Dynaforest
+# Gibbs Forest
 
-Code for dynaforest, an tree ensemble algorithm with splits decided at the forest level, not the tree. This algorithm was designed to test and understand the effect of correlation among trees in a random forest, and whether the bias of individual trees could be reduced while retaining low correlation between trees. Pseudocode can be found in [this file](pseudocode.pdf), and key formulas and derivatives can be found [here](cumsum.pdf) 
-
-This algorithm is fully coded, and can be ran on your device. After analysis, the key findings are the following:
-- On various testing datasets, dynaforest does indeed have lower bias within each tree. However, it also has considerably larger paired tree correlations. This often balances out -- when n_trees is large and so is window, the correlation is often 2x as large as in a general random forest. However, the bias is often small enough that the total error is quite low -- often **significantly** lower than a random forest. 
-- Dynaforest's algorithm is necessarily much, much slower than that of random forest (100x or more). AFAICT, there is no algorithm to reduce this time. Parallelization is probably useful, though may be hard to code due to constant communication between parallel calculations. 
-
-TODO:
-- Change bootstrapping so it only takes place in the initial trees, use full dataset X for all after
-- Change predictions so that it updates correctly
-- Add the possibility for initial trees to be multiple layers deep
+Code for Gibbs Forest, an tree ensemble algorithm with splits decided at the forest level, not the tree. I'm actively working on this project, as well as on a similar one that analyzes different methods for binning in LGBM. Check out the issues tab for current problems I'm working on fixing (mostly stuff dedicated to making this faster), as well as [this file](https://github.com/ashlab11/GibbsForest/blob/main/scripts/openmlexperiment.py) for info on the tests I'm running to compare Gibbs with generic tree-boosting methods.
